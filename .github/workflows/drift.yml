@@ -83,11 +83,13 @@ jobs:
             echo "FERROTAPE_PYTHON=$PYTHON_PATH"
           } >> "$GITHUB_ENV"
       - name: Read every case with them
-        # `check` exits 1 where a reading changed. That is the finding, kept
-        # for the report rather than stopping the run here.
+        # `check` exits 1 where a reading changed, other than the changes
+        # `catalog/known-changes.txt` lists. That is the finding, kept for the
+        # report rather than stopping the run here.
         run: |
           status=0
-          cargo run --release -p ferrotape-harness -- check --unpinned catalog \
+          cargo run --release -p ferrotape-harness -- \
+            check --unpinned --known catalog/known-changes.txt catalog \
             > changes.txt 2> checked.txt || status=$?
           cat checked.txt
           echo "CHECK_STATUS=$status" >> "$GITHUB_ENV"
@@ -118,6 +120,14 @@ jobs:
               1) echo '```'; cat changes.txt; echo '```' ;;
               *) echo "The check did not run to the end:"; echo '```'; cat checked.txt; echo '```' ;;
             esac
+            if grep --quiet ' reads as catalog/known-changes.txt records$' checked.txt; then
+              echo
+              echo "# Known changes"
+              echo
+              echo '```'
+              grep ' reads as catalog/known-changes.txt records$' checked.txt
+              echo '```'
+            fi
           } > report.md
           head -c 100000 report.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -132,7 +142,9 @@ jobs:
         # Gates nothing: a failed scheduled run is what tells a maintainer
         # that a reader has moved. The report says how. The answer is a
         # measurement of the new release, and a decision on moving the pin,
-        # with each case's readings recorded again.
+        # with each case's readings recorded again; or, where the change is
+        # understood and the pin stays, its block added to
+        # `catalog/known-changes.txt`.
         run: |
           if [ "$CHECK_STATUS" != 0 ]; then
             echo "A reader's newest release reads a case otherwise; see the report."

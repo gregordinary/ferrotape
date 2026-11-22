@@ -4,9 +4,10 @@
 //! harness record [--unpinned] PATH...
 //!     record each reference reader's reading of every case under PATH into
 //!     its file
-//! harness check [--unpinned] PATH...
+//! harness check [--unpinned] [--known FILE] PATH...
 //!     read every case under PATH with the reference readers, and report
-//!     each reading that differs from the one recorded
+//!     each reading that differs from the one recorded, other than those
+//!     FILE holds
 //! harness build CASE OUT
 //!     write a case's archive to OUT
 //! harness read PATH...
@@ -26,6 +27,11 @@
 //! reader's newer release does. `check` exits with status 1 where any
 //! reading differs, and `mutate` where any mutant is read otherwise.
 //!
+//! `--known` names a file of changes a reader's newer release is known to
+//! make, each written as `check` reports it (see [`known`]). `check`
+//! reports a change the file holds as known, and does not count it as a
+//! difference.
+//!
 //! `mutate` reads mutants 0, 1, 2 and on of the seed (by default 1) until
 //! it has read `--count` of them or `--seconds` have passed, on `--jobs`
 //! threads (by default 4). A mutant ferrotape refuses in every setting is
@@ -39,7 +45,7 @@ use std::process::ExitCode;
 
 use ferrotape_harness::case::{Case, Reader};
 use ferrotape_harness::record::{self, Readers};
-use ferrotape_harness::{case_files, load};
+use ferrotape_harness::{case_files, known, load};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -71,8 +77,31 @@ fn scratch() -> PathBuf {
 }
 
 fn record_or_check(args: &[String], record: bool) -> Result<bool, String> {
-    let unpinned = args.first().is_some_and(|a| a == "--unpinned");
-    let paths = if unpinned { &args[1..] } else { args };
+    let mut unpinned = false;
+    let mut known: Option<(String, Vec<String>)> = None;
+    let mut rest = args;
+    loop {
+        match rest {
+            [flag, tail @ ..] if flag == "--unpinned" => {
+                unpinned = true;
+                rest = tail;
+            }
+            [flag, tail @ ..] if flag == "--known" => {
+                if record {
+                    return Err("--known is for check alone".to_owned());
+                }
+                let [file, tail @ ..] = tail else {
+                    return Err("--known names a file".to_owned());
+                };
+                let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?;
+                let keys = known::parse(&text).map_err(|e| format!("{file}: {e}"))?;
+                known = Some((file.clone(), keys));
+                rest = tail;
+            }
+            _ => break,
+        }
+    }
+    let paths = rest;
     if paths.is_empty() {
         return Err("name a case file or a directory of them".to_owned());
     }
@@ -84,6 +113,7 @@ fn record_or_check(args: &[String], record: bool) -> Result<bool, String> {
     }
     let mut same = true;
     let mut count = 0;
+    let mut known_count = 0;
     for path in paths {
         for file in case_files(Path::new(path))? {
             let mut case: Case = load(&file)?;
@@ -100,13 +130,28 @@ fn record_or_check(args: &[String], record: bool) -> Result<bool, String> {
             for (reader, version, reading) in &readings {
                 let recorded = case.readings.iter().find(|(r, _, _)| r == reader);
                 if recorded.map(|(_, _, r)| r) != Some(reading) {
-                    same = false;
                     let was = recorded.map_or(String::from("nothing\n"), |(_, v, r)| {
                         format!("{} {v}:\n{r}", reader.name())
                     });
+                    let case_name = file.display().to_string();
+                    if let Some((known_file, keys)) = &known
+                        && keys.contains(&known::key(
+                            &case_name,
+                            reader.name(),
+                            &reading.to_string(),
+                            &was,
+                        ))
+                    {
+                        known_count += 1;
+                        eprintln!(
+                            "{case_name}: {} {version} reads as {known_file} records",
+                            reader.name()
+                        );
+                        continue;
+                    }
+                    same = false;
                     println!(
-                        "{}: {} {version} now reads:\n{reading}recorded, {was}",
-                        file.display(),
+                        "{case_name}: {} {version} now reads:\n{reading}recorded, {was}",
                         reader.name()
                     );
                 }
@@ -116,6 +161,11 @@ fn record_or_check(args: &[String], record: bool) -> Result<bool, String> {
     let _ = std::fs::remove_dir_all(&scratch);
     let verb = if record { "recorded" } else { "checked" };
     eprintln!("{count} cases {verb} with {}", versions(&readers));
+    match known_count {
+        0 => {}
+        1 => eprintln!("1 reading differs as known"),
+        n => eprintln!("{n} readings differ as known"),
+    }
     Ok(same)
 }
 

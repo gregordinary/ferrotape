@@ -7,11 +7,13 @@
 //! from the archive at the version the catalog pins. [`case`] reads a case
 //! file, [`archive`] builds its archive, [`compare`] reads it with ferrotape
 //! and holds the result to the case, [`record`] runs the reference readers,
-//! and [`mutate`] derives new archives from the catalog's.
+//! and [`mutate`] derives new archives from the catalog's. [`known`] reads
+//! the readings a reader's newer release is known to give otherwise.
 
 pub mod archive;
 pub mod case;
 pub mod compare;
+pub mod known;
 pub mod mutate;
 pub mod reading;
 pub mod record;

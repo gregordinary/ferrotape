@@ -1,0 +1,18 @@
+# Readings a reader's newer release gives otherwise than the release the
+# catalog pins, where the change is understood and the pin stays. Each is
+# written as `harness check --unpinned` reports it, and the weekly workflow
+# reads the catalog with `--known` naming this file, so it fails only on a
+# change not listed here. A change is matched by its case, its reader, the
+# newer reading and the recorded one, not by the newer release's version.
+#
+# Python 3.15: a pax size record beside the format 1.0 sparse records is
+# still read as the file's length, and the member after it is now listed.
+
+catalog/sparse/a-sparse-file-in-pax-format-1.0-beside-a-size-record.case: python 3.15.2 now reads:
+member type=0 path=sp size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+recorded, python 3.12.3:
+member type=0 path=sp size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024
+ok
+

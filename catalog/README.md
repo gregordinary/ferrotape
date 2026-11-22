@@ -211,7 +211,12 @@ harness/readers.sh install go 1.27.0 675c26c449cbb18fc24b74650de1eabbae6e16f6432
 
 CI checks every case's readings with the pinned readers on each pull
 request, and a weekly workflow reads the catalog with each reader's newest
-release, reporting each reading that changes.
+release, reporting each reading that changes. A change that is understood,
+where the pin stays, is listed in `known-changes.txt` as `check` reports it.
+The weekly workflow passes that file to `check --known`, and fails only on a
+change the file does not list. A change is matched by its case, its reader,
+the newer reading and the recorded one. A later release reading the same way
+is therefore still known, and a case recorded again is not.
 
 GNU tar and bsdtar are read through their verbose listings, in the C locale
 and UTC, each run under its plain name, and GNU tar's regular files' data
