@@ -161,16 +161,16 @@
 //! A [`Level`] says whose readings an archive must agree with to be read.
 //! [`Level::Strict`], the default, counts every reader in wide use, the Rust
 //! tar crates among them, and suits archives from sources the caller does
-//! not control. [`Level::Compatible`] counts the four reference readers
-//! alone, and suits archives a trusted publisher vouches for; it reads one
-//! kind of member the four extract differently, as GNU tar extracts it, which
-//! its documentation states.
+//! not control. [`Level::Compatible`] counts the four reference readers and
+//! POSIX, and no others, and suits archives a trusted publisher vouches for.
+//! It reads one kind of member the four extract differently, as GNU tar
+//! extracts it, which its documentation states.
 //!
 //! [`GlobalHeaders`] says what is done with a global extended header, which
 //! one family of readers applies to every later member and the other
-//! ignores: refuse one that would change a member (the default), apply it as
-//! GNU tar and Python do, or apply nothing, as Go does. In every
-//! mode its records reach the caller through [`Entry::global`].
+//! ignores. The default refuses one holding any record but `comment`. The
+//! others apply it as GNU tar and Python do, or apply nothing, as Go does. In
+//! every mode its records reach the caller through [`Entry::global`].
 //!
 //! ```
 //! # let archive: &[u8] = &[0; 1024];
@@ -192,9 +192,10 @@
 //! A [`Header`] describes a member to write: one constructor for each kind of
 //! member, and a method for each field. [`Header::encode`] writes it as a
 //! POSIX ustar header block, preceded by a pax extended header for whatever
-//! the block cannot hold exactly, and refuses, with a [`HeaderError`], a
-//! header that would not read back as set. A [`Writer`] appends each member's
-//! header and data to any [`Write`](std::io::Write), and ends the archive:
+//! the block cannot hold exactly. It refuses, with a [`HeaderError`], a header
+//! that would not read back as set at [`Level::Compatible`]. A [`Writer`]
+//! appends each member's header and data to any [`Write`](std::io::Write), and
+//! ends the archive:
 //!
 //! ```
 //! use ferrotape::{Header, Timestamp, Writer};
@@ -211,7 +212,11 @@
 //! ```
 //!
 //! Every header the writer encodes is one the reader reads back as set, at
-//! either level and in every global-header mode.
+//! [`Level::Compatible`] and in every global-header mode. At
+//! [`Level::Strict`], the reader refuses one kind: a member whose mode has
+//! setuid, setgid or sticky beside an access control list
+//! ([`ErrorKind::SpecialBitsWithAcl`]). The writer writes such a member as GNU
+//! tar does.
 //!
 //! Paths, link targets and owner names are the archive's bytes. Whether a
 //! path is acceptable, an absolute one or one with a `..` component, is the

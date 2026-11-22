@@ -113,9 +113,11 @@ library's build:
   is final, that every offset and size stays within the input, and that
   `Strict` reads nothing `Compatible` reads otherwise (and `Refuse` nothing
   `Apply` or `Defer` does).
-- `round_trip` generates headers from its input, writes them, and checks that
-  every header the writer encodes reads back as it was set, at each level and
-  in each mode, and that a header it refuses writes nothing.
+- `round_trip` generates headers from its input and writes them. It checks
+  that a header it refuses writes nothing, and that every other reads back as
+  set at each level and in each mode. The one exception is a member whose mode
+  has setuid, setgid or sticky beside an access control list, which `Strict`
+  refuses.
 
 The targets need a nightly toolchain. CI builds both and runs each for a
 fixed number of runs; after changing the reader or the writer, run the

@@ -36,12 +36,12 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   archive that any reader in wide use reads with other members than GNU tar,
   bsdtar, Go and Python do; `Compatible` refuses only one those four read
   apart.
-- `GlobalHeaders`, set with `Reader::with_global_headers`: a global extended
-  header is refused where it would change a member (`Refuse`, the default),
-  applied as GNU tar and Python apply it (`Apply`), or applied to nothing, as
-  Go reads it, and bsdtar before libarchive 3.8.10 (`Defer`). In every mode
-  its records reach the caller once: on the member after it (`Entry::global`),
-  or after the last member (`Reader::trailing_global`).
+- `GlobalHeaders`, set with `Reader::with_global_headers`: what is done with a
+  global extended header holding any record but `comment`. `Refuse`, the
+  default, refuses it. `Apply` applies it as GNU tar and Python do. `Defer`
+  applies nothing, as Go reads it, and bsdtar before libarchive 3.8.10. In
+  every mode its records reach the caller once: on the member after it
+  (`Entry::global`), or after the last member (`Reader::trailing_global`).
 - What the reader refuses at every level, each with an `ErrorKind`: a header
   that fails its checksum; a numeric field that does not read (one holding
   digits, then a space and more digits, among them) or reads negative where it

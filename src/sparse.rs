@@ -14,8 +14,8 @@
 //! bsdtar write, and part ways over nearly every other: which region comes
 //! first, whether two may touch, where the file ends, what a number may hold.
 //! So a map is read only in those shapes, and every other is refused
-//! ([`SparseFlaw`]). `tests/sparse.rs` compares each rule with the reference
-//! readers, and the catalog's `sparse/` cases hold their readings.
+//! ([`SparseFlaw`]). The catalog's `sparse/` cases hold the reference
+//! readers' readings each rule rests on, and the tests hold the API to them.
 
 use alloc::vec::Vec;
 

@@ -12,7 +12,9 @@ checks an archive with ferrotape therefore sees the members those readers
 would extract: a package registry validating an upload, a scanner, a tool
 that indexes a format with tar inside. Its writer encodes ustar headers,
 preceded by pax records for what ustar cannot hold, and refuses a header that
-would not read back as set.
+would not read back as set. A member whose mode has setuid, setgid or sticky
+beside an access control list reads back at the `Compatible` level alone. The
+writer writes it as GNU tar does, but the `Strict` level refuses it.
 
 ferrotape parses and serializes, and never touches a filesystem. It contains
 no `unsafe` code, has no dependencies, and holds every allocation an archive
