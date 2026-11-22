@@ -32,10 +32,19 @@ usage() {
     exit 2
 }
 
+# curl, retrying on any error. ftpmirror.gnu.org sends each request to a
+# mirror of its choosing, and a mirror can be unreachable or serve an expired
+# certificate, so a retry asks again. What is downloaded is checked by digest
+# or signature, whichever mirror serves it.
+get() {
+    curl --fail --silent --show-error --location --connect-timeout 30 \
+        --retry 5 --retry-all-errors "$@"
+}
+
 # Downloads URL to FILE and checks it against SHA256.
 fetch() {
     local url=$1 file=$2 sha256=$3
-    curl --fail --silent --show-error --location --retry 3 --output "$file" "$url"
+    get --output "$file" "$url"
     echo "$sha256  $file" | sha256sum --check --strict --quiet
 }
 
@@ -94,7 +103,7 @@ newest_libarchive() {
     if [ -n "${GITHUB_TOKEN:-}" ]; then
         auth=(--header "Authorization: Bearer $GITHUB_TOKEN")
     fi
-    curl --fail --silent --show-error --location "${auth[@]}" \
+    get "${auth[@]}" \
         https://api.github.com/repos/libarchive/libarchive/releases/latest |
         python3 -I -c '
 import json, sys
@@ -110,7 +119,7 @@ else:
 }
 
 newest_go() {
-    curl --fail --silent --show-error --location 'https://go.dev/dl/?mode=json' |
+    get 'https://go.dev/dl/?mode=json' |
         python3 -I -c '
 import json, sys
 release = next(r for r in json.load(sys.stdin) if r["stable"])
@@ -125,13 +134,12 @@ else:
 
 newest_gnu_tar() {
     local version
-    version=$(curl --fail --silent --show-error --location "$gnu_mirror/tar/" |
+    version=$(get "$gnu_mirror/tar/" |
         grep -oE 'tar-[0-9]+(\.[0-9]+)+\.tar\.xz"' | tr -d '"' |
         sed -e 's/^tar-//' -e 's/\.tar\.xz$//' | sort -V | tail -n 1)
     [ -n "$version" ] || { echo "no GNU tar release listed" >&2; exit 1; }
     for file in "tar/tar-$version.tar.xz" "tar/tar-$version.tar.xz.sig" gnu-keyring.gpg; do
-        curl --fail --silent --show-error --location --retry 3 \
-            --output "$work/$(basename "$file")" "$gnu_mirror/$file"
+        get --output "$work/$(basename "$file")" "$gnu_mirror/$file"
     done
     gpg --batch --quiet --homedir "$work" --no-default-keyring \
         --keyring "$work/gnu-keyring.gpg" \
