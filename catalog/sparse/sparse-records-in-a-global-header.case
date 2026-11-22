@@ -1,0 +1,34 @@
+[statement]
+Format 1.0 records in a global header before a regular member: bsdtar fails,
+Go reads a file of the stored data, GNU tar applies them. Refused at both
+levels in every mode.
+
+[archive]
+global GNU.sparse.major=1 GNU.sparse.minor=0 GNU.sparse.name=sp GNU.sparse.realsize=2048
+header name=GNUSparseFile.0/sp size=1024
+data "1\n1024\n512\n""\0"*501"S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused Sparse(Global) at 0
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data=2048:0135026b316016f7
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'GNU.sparse.major'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+error "ReadError: unexpected end of data"
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=GNUSparseFile.0/sp size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n1024\n512\n""\0"*501"S"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

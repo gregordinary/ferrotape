@@ -1,0 +1,26 @@
+[statement]
+A character device in a v7 header, which has no device fields. Every
+reader reports device 0,0, and so does ferrotape.
+
+[archive]
+header name=chr typeflag=3 magic=v7
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=c path=chr device=0,0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=c path=chr device=0,0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=3 path=chr size=0 device=0,0 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname=""
+ok
+
+[go 1.27.0]
+member type=3 path=chr size=0 device=0,0 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data=""
+ok

@@ -1,0 +1,36 @@
+[statement]
+A zero block, then a header. GNU tar, bsdtar and Python end the archive at
+the zero block and Go refuses it, but GNU tar with `--ignore-zeros` reads on
+and finds a second member, as some Rust readers do. In Strict, ferrotape
+refuses the archive at the block after the zero block. In Compatible, the
+archive ends at the zero block, as GNU tar reads it, and `finish` reads past
+it without refusing what it finds.
+
+[archive]
+header name=first
+data "hello\n"
+zeros 1
+header name=second
+data "hello\n"
+end
+
+[verdict]
+strict: refused TrailingData at 1536
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=first size=6 mode=0o644 data="hello\n"
+warning "tar: A lone zero block at 3"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=first size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+error "archive/tar: invalid tar header"

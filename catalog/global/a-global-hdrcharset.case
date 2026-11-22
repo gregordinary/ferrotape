@@ -1,0 +1,39 @@
+[statement]
+A global header holding a `hdrcharset` neither of POSIX's character sets
+names. GNU tar ignores it, bsdtar refuses the global header, and Python and
+Go read the member after it alike. A record other than `comment` is refused
+where global records are applied or refused, and read in `defer`.
+
+[archive]
+global hdrcharset=6
+pax path=d/
+header name=f
+header name=a
+data "x"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused GlobalRecord at 0
+defer: read
+
+[gnu-tar 1.35]
+member listed=d path=d/ size=0 mode=0o644
+member listed=- path=a size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'hdrcharset'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=d size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=d/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

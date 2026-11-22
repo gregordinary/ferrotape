@@ -1,0 +1,29 @@
+[statement]
+A GNU long name over a header whose name field, the long name cut to 100
+bytes, ends in `/`. The long name names the member, so it is a regular file:
+a trailing slash makes a directory only where the resolved path ends in one.
+
+[archive]
+longname "a"*99"/file"
+header name="a"*99"/"
+data "data\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path="a"*99"/file" size=5 mode=0o644 data="data\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path="a"*99"/file" size=5 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path="a"*99"/file" size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="data\n"
+ok
+
+[go 1.27.0]
+member type=0 path="a"*99"/file" size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="data\n"
+ok

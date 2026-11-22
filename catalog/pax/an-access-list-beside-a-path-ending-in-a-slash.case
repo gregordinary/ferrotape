@@ -1,0 +1,36 @@
+[statement]
+A valid `SCHILY.acl.access` record beside a `path` ending in a slash over a
+regular file. GNU tar and bsdtar list a directory. Whether bsdtar parses such
+a record depends on its value, so ferrotape refuses any record but those it
+applies, `comment` and `hdrcharset` on a regular member named as a
+directory.
+
+[archive]
+pax SCHILY.acl.access=user::rwx,group::r-x,other::r-x path=d/
+header name=f
+header name=a
+data "x"
+end
+
+[verdict]
+all: refused DirectoryWithRecord at 1024
+
+[gnu-tar 1.35]
+member listed=d path=d/ size=0 mode=0o644
+member listed=- path=a size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=d/ size=0 mode=0o755
+member listed=- path=a size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=d size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=d/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

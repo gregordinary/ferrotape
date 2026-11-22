@@ -1,0 +1,35 @@
+[statement]
+A member named with a leading `../`, then one with the same name without it.
+Every reader lists both as stored; GNU tar reports removing the prefix and
+does not extract the first at all. ferrotape reads both as stored.
+
+[archive]
+header name=../a
+data "y"
+header name=a
+data "x"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=../a size=1 mode=0o644
+member listed=- path=a size=1 mode=0o644 data="x"
+warning "tar: Removing leading `../' from member names"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=../a size=1 mode=0o644
+member listed=- path=a size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=../a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=../a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

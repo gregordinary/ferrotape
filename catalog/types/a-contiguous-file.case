@@ -1,0 +1,27 @@
+[statement]
+A contiguous file (typeflag `7`) is a regular file with data, read so by every
+reader.
+
+[archive]
+header name=contig typeflag=7
+data "seven"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=C path=contig size=5 mode=0o644 data="seven"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=contig size=5 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=7 path=contig size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="seven"
+ok
+
+[go 1.27.0]
+member type=7 path=contig size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="seven"
+ok

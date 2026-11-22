@@ -1,0 +1,35 @@
+[statement]
+A format 1.0 map of 60 regions and the empty one, 597 bytes: two blocks,
+numbers crossing the boundary. Read at Compatible.
+
+[archive]
+pax GNU.sparse.major=1 GNU.sparse.minor=0 GNU.sparse.name=sp GNU.sparse.realsize=61440
+header name=GNUSparseFile.0/sp typeflag=0 size=31744
+data "61\n0\n512\n1024\n512\n2048\n512\n3072\n512\n4096\n512\n5120\n512\n6144\n512\n7168\n512\n8192\n512\n9216\n512\n10240\n512\n11264\n512\n12288\n512\n13312\n512\n14336\n512\n15360\n512\n16384\n512\n17408\n512\n18432\n512\n19456\n512\n20480\n512\n21504\n512\n22528\n512\n23552\n512\n24576\n512\n25600\n512\n26624\n512\n27648\n512\n28672\n512\n29696\n512\n30720\n512\n31744\n512\n32768\n512\n33792\n512\n34816\n512\n35840\n512\n36864\n512\n37888\n512\n38912\n512\n39936\n512\n40960\n512\n41984\n512\n43008\n512\n44032\n512\n45056\n512\n46080\n512\n47104\n512\n48128\n512\n49152\n512\n50176\n512\n51200\n512\n52224\n512\n53248\n512\n54272\n512\n55296\n512\n56320\n512\n57344\n512\n58368\n512\n59392\n512\n60416\n512\n61440\n0\n""\0"*426"S"*512"T"*512"U"*512"V"*512"W"*512"X"*512"Y"*512"Z"*512"["*512"\\"*512"]"*512"^"*512"_"*512"`"*512"a"*512"b"*512"c"*512"d"*512"e"*512"f"*512"g"*512"h"*512"i"*512"j"*512"k"*512"l"*512"m"*512"n"*512"o"*512"p"*512"q"*512"r"*512"s"*512"t"*512"u"*512"v"*512"w"*512"x"*512"y"*512"z"*512"{"*512"|"*512"}"*512"~"*512"\x7f"*512"\x80"*512"\x81"*512"\x82"*512"\x83"*512"\x84"*512"\x85"*512"\x86"*512"\x87"*512"\x88"*512"\x89"*512"\x8a"*512"\x8b"*512"\x8c"*512"\x8d"*512"\x8e"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused Sparse(PaxForm) at 1024
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=sp size=61440 mode=0o644 data=61440:b2a2d0b88c651725
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=sp size=61440 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=sp size=61440 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=61440:b2a2d0b88c651725
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=sp size=61440 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=61440:b2a2d0b88c651725
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

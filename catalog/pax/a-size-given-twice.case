@@ -1,0 +1,46 @@
+[statement]
+A pax header giving `size` twice: 1024, which frames two headers as data, then
+0, which shows them as members. The reference readers take the last and list
+the two members; a reader taking the first hides them. In Strict, ferrotape
+refuses the archive; in Compatible, it takes the last.
+
+[archive]
+pax size=1024 size=0
+header name=outer size=0
+header name=smug1
+header name=smug2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused RepeatedKeyword at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=outer size=0 mode=0o644 data=""
+member listed=- path=smug1 size=0 mode=0o644 data=""
+member listed=- path=smug2 size=0 mode=0o644 data=""
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=outer size=0 mode=0o644
+member listed=- path=smug1 size=0 mode=0o644
+member listed=- path=smug2 size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=outer size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smug1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smug2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=outer size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smug1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smug2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

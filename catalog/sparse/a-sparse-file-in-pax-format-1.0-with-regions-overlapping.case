@@ -1,0 +1,33 @@
+[statement]
+Two regions overlapping: bsdtar and Go refuse the archive; GNU tar and
+Python extract different files. Refused at both levels.
+
+[archive]
+pax GNU.sparse.major=1 GNU.sparse.minor=0 GNU.sparse.name=sp GNU.sparse.realsize=2048
+header name=GNUSparseFile.0/sp typeflag=0 size=2560
+data "2\n0\n1024\n512\n1024\n""\0"*494"S"*1024"T"*1024
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused Sparse(PaxForm) at 1024
+compatible: refused Sparse(Order) at 1024
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="S"*1024
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Malformed sparse map data"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="S"*1024"T"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

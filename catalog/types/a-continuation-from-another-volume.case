@@ -1,0 +1,35 @@
+[statement]
+GNU's continuation of a file from an earlier volume (typeflag `M`). Every
+reader lists it as a member with data, but on extraction GNU tar creates
+nothing for it, where bsdtar and Python create a file. ferrotape refuses it.
+
+[archive]
+header name=tM typeflag=M size=1024
+header name=sM1
+header name=sM2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused VolumeContinuation at 0
+
+[gnu-tar 1.35]
+member listed=M path=tM size=1024 mode=0o644 note="--Continued at byte 0--"
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=? path=tM size=1024 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=M path=tM size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:cfcbaedd80443cfd
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=M path=tM size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:cfcbaedd80443cfd
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

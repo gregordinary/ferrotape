@@ -1,0 +1,28 @@
+[package]
+name = "ferrotape"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gregordinary/ferrotape"
+documentation = "https://docs.rs/ferrotape"
+description = "A tape archive (tar) reader and header writer for untrusted input: ustar, pax, GNU and v7, in safe Rust with no dependencies."
+keywords = ["tar", "archive", "pax", "ustar", "parser"]
+categories = ["encoding", "parser-implementations"]
+# What ships is the library and its documentation. Everything else in the
+# repository is a development input, and stays there, where the checks run.
+include = ["/src", "/README.md", "/CHANGELOG.md", "/LICENSE-APACHE", "/LICENSE-MIT"]
+
+# The harness is a member, so `cargo test --workspace` checks the case catalog
+# with the library's tests. The fuzzing harness is a workspace of its own.
+[workspace]
+members = ["harness"]
+exclude = ["fuzz"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[dependencies]

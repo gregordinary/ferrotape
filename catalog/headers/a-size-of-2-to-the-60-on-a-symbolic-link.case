@@ -1,0 +1,40 @@
+[statement]
+A symbolic link whose header declares a size of 2^60 in base-256. bsdtar
+stops at it ("Tar entry size overflow") and lists only the member before it;
+GNU tar, Python and Go read on, the link with no data. ferrotape refuses any
+declared size of 2^60 or more, at both levels.
+
+[archive]
+header name=t
+data "x"
+header name=l typeflag=2 linkname=t size=base256:1152921504606846976
+header name=after
+data "y"
+end
+
+[verdict]
+all: refused HeaderField at 1024
+
+[gnu-tar 1.35]
+member listed=- path=t size=1 mode=0o644 data="x"
+member listed=l path=l link=t size=0 mode=0o644
+member listed=- path=after size=1 mode=0o644 data="y"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=t size=1 mode=0o644
+warning "bsdtar: Tar entry size overflow"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=t size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=2 path=l link=t size=1152921504606846976 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=0 path=t size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=2 path=l link=t size=1152921504606846976 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

@@ -1,0 +1,37 @@
+[statement]
+A sticky directory, mode 1777, carrying an access control list. On
+extraction GNU tar keeps the sticky bit and bsdtar drops it, leaving a
+directory where anyone may remove another's files (measured by extraction).
+Strict refuses it; Compatible reads the header's mode, as GNU tar extracts
+it.
+
+[archive]
+pax SCHILY.acl.access=user::rwx,user:65534:rwx,group::r-x,mask::rwx,other::rwx SCHILY.acl.default=""
+header name=d/ typeflag=5 mode=0o1777
+header name=after
+data "y"
+end
+
+[verdict]
+strict: refused SpecialBitsWithAcl at 1024
+compatible: read
+
+[gnu-tar 1.35]
+member listed=d path=d/ size=0 mode=0o1777
+member listed=- path=after size=1 mode=0o644 data="y"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=d/ size=0 mode=0o757
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=5 path=d size=0 mode=0o1777 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=5 path=d/ size=0 mode=0o1777 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

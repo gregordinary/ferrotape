@@ -1,0 +1,31 @@
+[statement]
+In a GNU incremental dump (`tar -g`), a GNU header holds an access and a
+change time where a POSIX header holds its prefix. GNU tar, bsdtar and Go
+never join those bytes to the name, and Python joins them wherever the area's
+first byte is not NUL, so the readers name the member differently. ferrotape
+refuses such a header, with an error that names a GNU incremental archive.
+
+[archive]
+# Octal times at the access and change time fields of an incremental dump.
+header name=gnuname magic=gnu @345="00004553207\0" @357="00035145661\0"
+data "g\n"
+end
+
+[verdict]
+all: refused PrefixArea at 0
+
+[gnu-tar 1.35]
+member listed=- path=gnuname size=2 mode=0o644 data="g\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=gnuname size=2 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=00004553207/gnuname size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="g\n"
+ok
+
+[go 1.27.0]
+member type=0 path=gnuname size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="g\n"
+ok

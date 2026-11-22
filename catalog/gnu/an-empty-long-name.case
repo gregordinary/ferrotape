@@ -1,0 +1,29 @@
+[statement]
+A GNU long name of size zero. It leaves the member no name, which
+ferrotape refuses as it refuses an empty name in a header.
+
+[archive]
+header name=././@LongLink typeflag=L magic=gnu size=0
+header name=hdr
+data "x"
+end
+
+[verdict]
+all: refused EmptyName at 512
+
+[gnu-tar 1.35]
+member listed=- path="" size=1 mode=0o644
+warning "tar: Substituting `.' for empty member name"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=hdr size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path="" size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=hdr size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

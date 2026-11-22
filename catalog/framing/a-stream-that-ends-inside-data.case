@@ -1,0 +1,29 @@
+[statement]
+A stream that ends inside a member's data is malformed. ferrotape yields the
+member and refuses the archive where its data ends early.
+
+[archive]
+header name=short size=1000
+bytes "x"*600
+
+[verdict]
+all: refused Truncated at 1112
+
+[gnu-tar 1.35]
+member listed=- path=short size=1000 mode=0o644 data="x"*512
+warning "tar: Unexpected EOF in archive"
+warning "tar: Error is not recoverable: exiting now"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=short size=1000 mode=0o644
+warning "bsdtar: Truncated input file (needed 1024 bytes, only 600 available)"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+error "ReadError: unexpected end of data"
+
+[go 1.27.0]
+member type=0 path=short size=1000 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"*600
+error "unexpected EOF"

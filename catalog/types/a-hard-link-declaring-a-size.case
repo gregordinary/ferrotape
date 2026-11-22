@@ -1,0 +1,49 @@
+[statement]
+A hard link declaring a size, its body holding two headers. POSIX's pax
+format says such a link's data follows it, and every reference reader reads
+none, listing the two headers as members. ferrotape refuses the archive.
+
+[archive]
+header name=orig
+data "hello\n"
+header name=hl typeflag=1 linkname=orig size=1024
+header name=smuggled-h1
+header name=smuggled-h2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused SizeWithoutData at 1024
+
+[gnu-tar 1.35]
+member listed=- path=orig size=6 mode=0o644 data="hello\n"
+member listed=h path=hl link=orig size=0 mode=0o644
+member listed=- path=smuggled-h1 size=0 mode=0o644 data=""
+member listed=- path=smuggled-h2 size=0 mode=0o644 data=""
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=orig size=6 mode=0o644
+member listed=- path=hl link=orig size=0 mode=0o644
+member listed=- path=smuggled-h1 size=0 mode=0o644
+member listed=- path=smuggled-h2 size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=orig size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=1 path=hl link=orig size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=smuggled-h1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-h2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=orig size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=1 path=hl link=orig size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-h1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-h2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

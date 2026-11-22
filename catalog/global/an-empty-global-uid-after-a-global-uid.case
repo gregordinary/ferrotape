@@ -1,0 +1,42 @@
+[statement]
+A global `uid`, a member, then a global header with an empty `uid`. In Apply,
+a second global header once one has set a member's keyword is refused, since
+GNU tar replaces where Python merges. In Defer, neither applies.
+
+[archive]
+global uid=1234
+header name=a uid=7
+data "hello\n"
+global uid=""
+header name=b uid=7
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused SecondGlobal at 2048
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+member listed=- path=b size=6 mode=0o644 data="hello\n"
+warning "tar: Malformed extended header: invalid uid="
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'uid'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=1234 gid=0 uname=root gname=root data="hello\n"
+member type=0 path=b size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=7 gid=0 uname=root gname=root data="hello\n"
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=b size=6 mode=0o644 mtime=0 uid=7 gid=0 uname=root gname=root data="hello\n"
+ok

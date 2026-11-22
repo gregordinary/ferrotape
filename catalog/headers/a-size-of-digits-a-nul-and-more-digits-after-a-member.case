@@ -1,0 +1,40 @@
+[statement]
+A size field holding octal digits, a NUL and more digits, after another
+member. Every reader reads the digits before the NUL, as ferrotape does: a
+NUL ends a numeric field whatever follows it.
+
+[archive]
+header name=lead
+data "lead\n"
+header name=odd size="000006\000007"
+data "hello\n"
+header name=tail
+data "tail\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=lead size=5 mode=0o644 data="lead\n"
+member listed=- path=odd size=6 mode=0o644 data="hello\n"
+member listed=- path=tail size=5 mode=0o644 data="tail\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=lead size=5 mode=0o644
+member listed=- path=odd size=6 mode=0o644
+member listed=- path=tail size=5 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=lead size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="lead\n"
+member type=0 path=odd size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=0 path=tail size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="tail\n"
+ok
+
+[go 1.27.0]
+member type=0 path=lead size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="lead\n"
+member type=0 path=odd size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=0 path=tail size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="tail\n"
+ok

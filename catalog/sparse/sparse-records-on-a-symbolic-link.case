@@ -1,0 +1,36 @@
+[statement]
+Format 1.0 records on a symbolic link: bsdtar fails, GNU tar extracts the
+link. Refused at both levels.
+
+[archive]
+pax GNU.sparse.major=1 GNU.sparse.minor=0 GNU.sparse.name=sp GNU.sparse.realsize=2048
+header name=GNUSparseFile.0/sp typeflag=2 size=0
+data "2\n1024\n512\n2048\n0\n""\0"*494
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused Sparse(PaxForm) at 1024
+compatible: refused Sparse(NotRegular) at 1024
+
+[gnu-tar 1.35]
+member listed=l path=sp link="" size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=sp link="" size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+warning "bsdtar: Non-regular file cannot be sparse"
+warning "bsdtar: Damaged tar archive (bad header checksum)"
+warning "bsdtar: Retrying..."
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=2 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+error "unexpected EOF"

@@ -1,0 +1,33 @@
+[statement]
+Typeflag `I`, read as typeflag `E` is (see `typeflag-e-with-a-body`).
+
+[archive]
+header name=tI typeflag=I size=1024
+header name=sI1
+header name=sI2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=? path=tI size=1024 mode=0o644 data=1024:f30ea7b8dd341a95 note="unknown file type 'I'"
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=tI size=1024 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=I path=tI size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:f30ea7b8dd341a95
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=I path=tI size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:f30ea7b8dd341a95
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

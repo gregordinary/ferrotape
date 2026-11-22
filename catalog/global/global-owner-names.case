@@ -1,0 +1,32 @@
+[statement]
+A global header carrying `gid`, `uname` and `gname`. GNU tar and Python apply
+them, and bsdtar and Go do not.
+
+[archive]
+global gid=4321 uname=guser gname=ggroup
+header name=a uid=7 gid=8
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: read
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'gid'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=7 gid=4321 uname=guser gname=ggroup data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=7 gid=8 uname=root gname=root data="hello\n"
+ok

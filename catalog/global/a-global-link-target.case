@@ -1,0 +1,37 @@
+[statement]
+A global `linkpath`. GNU tar and Python retarget every link after it (Python
+reports it on a regular file too), and bsdtar and Go see each link's own
+target.
+
+[archive]
+global linkpath=gtarget
+header name=l typeflag=2 linkname=x
+header name=reg
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: read
+defer: read
+
+[gnu-tar 1.35]
+member listed=l path=l link=gtarget size=0 mode=0o644
+member listed=- path=reg size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'linkpath'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=2 path=l link=gtarget size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=reg link=gtarget size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=2 path=l link=x size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=reg size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

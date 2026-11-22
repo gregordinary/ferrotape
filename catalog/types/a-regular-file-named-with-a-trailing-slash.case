@@ -1,0 +1,28 @@
+[statement]
+A regular member (typeflag `0`) whose name ends in `/` and which declares no
+data. GNU tar and bsdtar make it a directory, and Python and Go a file. The
+readers agree on the members and differ on a type, where ferrotape follows
+GNU tar and bsdtar: the member is a directory.
+
+[archive]
+header name=d2/ typeflag=0
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=d path=d2/ size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=d2/ size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=d2/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=d2/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

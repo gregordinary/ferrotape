@@ -1,0 +1,39 @@
+[statement]
+A global `path` record before an old GNU sparse member: GNU tar applies it
+to the member and the one after; Python to the one after alone; bsdtar fails
+at the global header. Refused where global headers are applied; read in
+`defer`, the record applied to nothing, as Go reads it.
+
+[archive]
+global path=other
+header name=sp typeflag=S magic=gnu size=512 @386="0"*7"2000\0""0"*7"1000\0""0"*7"4000\0""0"*11"\0"*49 @483="0"*7"4000\0"
+data "S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused Sparse(Global) at 1024
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=other size=2048 mode=0o644 data="\0"*1024"S"*512"\0"*512
+member listed=- path=other size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'path'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=other size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=other size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

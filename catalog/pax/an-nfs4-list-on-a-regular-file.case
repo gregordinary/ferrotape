@@ -1,0 +1,37 @@
+[statement]
+A regular file of mode 640 carrying an NFSv4 access control list,
+`SCHILY.acl.ace`. GNU tar, Python and Go list mode 640; bsdtar, taking the
+mode from the list's text, lists and extracts 000. ferrotape reads the
+header's mode at both levels, a stated difference.
+
+[archive]
+pax SCHILY.acl.ace=owner@:rwxp--aARWcCos:-------:allow,group@:r-----a-R-c--s:-------:allow,everyone@:------a-R-c--s:-------:allow
+header name=f mode=0o640
+data "x"
+header name=after
+data "y"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=f size=1 mode=0o640 data="x"
+member listed=- path=after size=1 mode=0o644 data="y"
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.acl.ace'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=1 mode=0o0
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=1 mode=0o640 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=0 path=f size=1 mode=0o640 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

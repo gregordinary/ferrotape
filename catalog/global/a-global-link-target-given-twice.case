@@ -1,0 +1,33 @@
+[statement]
+A global header giving `linkpath` twice, with different values. GNU tar
+applies the first and Python the last, so the mode that applies global
+records refuses it at both levels, and Strict in every mode.
+
+[archive]
+global linkpath=one linkpath=two
+header name=l typeflag=2
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused RepeatedKeyword at 0
+strict defer: refused RepeatedKeyword at 0
+compatible defer: read
+
+[gnu-tar 1.35]
+member listed=l path=l link=one size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'linkpath'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=2 path=l link=two size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=2 path=l size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

@@ -1,0 +1,37 @@
+[statement]
+A character device of numbers 8,262144 with a pax `SCHILY.devminor` record
+of 262144 and none for the major, as bsdtar writes a device with a number of
+262,144 or more. bsdtar reads its own record back with the major 0,
+0,262144; GNU tar, Python and Go read 8,262144. ferrotape refuses it, at
+both levels.
+
+[archive]
+pax SCHILY.devminor=262144
+header name=c typeflag=3 devmajor=8 devminor=262144
+header name=after
+data "y"
+end
+
+[verdict]
+all: refused DeviceConflict at 1024
+
+[gnu-tar 1.35]
+member listed=c path=c device=8,262144 mode=0o644
+member listed=- path=after size=1 mode=0o644 data="y"
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.devminor'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=c path=c device=0,262144 mode=0o644
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=3 path=c size=0 device=8,262144 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=3 path=c size=0 device=8,262144 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

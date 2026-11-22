@@ -1,0 +1,47 @@
+[statement]
+A directory declaring a size, its body holding two headers. POSIX permits it,
+the size being the most the directory may hold, and stores no data after it.
+The reference readers read no data and list the two headers as members; some
+Rust readers read them as the directory's data. In Strict, ferrotape refuses
+the archive. In Compatible, it reads the directory with no data, and the two
+members after it.
+
+[archive]
+header name=dsz/ typeflag=5 size=1024
+header name=smuggled-d1
+header name=smuggled-d2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused SizeWithoutData at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=d path=dsz/ size=0 mode=0o644
+member listed=- path=smuggled-d1 size=0 mode=0o644 data=""
+member listed=- path=smuggled-d2 size=0 mode=0o644 data=""
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=dsz/ size=0 mode=0o644
+member listed=- path=smuggled-d1 size=0 mode=0o644
+member listed=- path=smuggled-d2 size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=5 path=dsz size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=smuggled-d1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-d2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=5 path=dsz/ size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-d1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-d2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

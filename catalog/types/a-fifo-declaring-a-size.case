@@ -1,0 +1,44 @@
+[statement]
+A FIFO declaring a size, whose size POSIX says is ignored when reading, read
+as a character device declaring one is (see
+`a-character-device-declaring-a-size`).
+
+[archive]
+header name=t6 typeflag=6 size=1024
+header name=s61
+header name=s62
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused SizeWithoutData at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=p path=t6 size=0 mode=0o644
+member listed=- path=s61 size=0 mode=0o644 data=""
+member listed=- path=s62 size=0 mode=0o644 data=""
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=p path=t6 size=0 mode=0o644
+member listed=- path=s61 size=0 mode=0o644
+member listed=- path=s62 size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=6 path=t6 size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=s61 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=s62 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=6 path=t6 size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=s61 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=s62 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

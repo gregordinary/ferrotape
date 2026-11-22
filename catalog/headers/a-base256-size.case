@@ -1,0 +1,26 @@
+[statement]
+A size in GNU's base-256 form is read as any other, by every reader.
+
+[archive]
+header name=b256 size=base256:5
+data "12345"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=b256 size=5 mode=0o644 data="12345"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=b256 size=5 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=b256 size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="12345"
+ok
+
+[go 1.27.0]
+member type=0 path=b256 size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="12345"
+ok

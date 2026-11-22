@@ -1,0 +1,28 @@
+[statement]
+A numeric field may hold GNU's base-256 form, marked by its first byte's
+high bit. A negative modification time read so is a time before 1970, and
+every reader reads it.
+
+[archive]
+header name=pre1970 mtime=base256:-86400
+data "old\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=pre1970 size=4 mode=0o644 data="old\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=pre1970 size=4 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=pre1970 size=4 mode=0o644 mtime=-86400 uid=0 gid=0 uname=root gname=root data="old\n"
+ok
+
+[go 1.27.0]
+member type=0 path=pre1970 size=4 mode=0o644 mtime=-86400 uid=0 gid=0 uname=root gname=root data="old\n"
+ok

@@ -1,0 +1,27 @@
+[statement]
+A GNU long link: the link target of the member after it, longer than the
+header's 100 bytes. Every reader reads it alike.
+
+[archive]
+longlink "t"*150
+header name=ll typeflag=2 linkname="t"*100
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=l path=ll link="t"*150 size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=ll link="t"*150 size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=ll link="t"*150 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=2 path=ll link="t"*150 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

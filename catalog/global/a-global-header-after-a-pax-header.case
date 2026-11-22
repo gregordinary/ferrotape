@@ -1,0 +1,32 @@
+[statement]
+A pax header, then a global header, then a member. Go lets the global header
+consume the pax header, and the other readers apply the pax header to the
+member. ferrotape refuses a global header that arrives while metadata waits
+for its member, in every mode.
+
+[archive]
+pax path=xname
+global comment=c
+header name=a
+data "hello\n"
+end
+
+[verdict]
+all: refused GlobalBetweenMetadata at 1024
+
+[gnu-tar 1.35]
+member listed=- path=xname size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=xname size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=xname size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

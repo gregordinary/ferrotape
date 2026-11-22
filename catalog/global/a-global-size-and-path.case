@@ -1,0 +1,43 @@
+[statement]
+A global header carrying `size` and `path`. GNU tar frames the next member by
+the global size and fails, and Python frames it by the header's size and
+reports the global one; bsdtar and Go apply nothing. Refused in the Refuse
+mode and, since GNU tar and Python disagree, in Apply; read in Defer, which
+applies nothing.
+
+[archive]
+global size=0 path=renamed
+header name=gfile
+data "G"*600
+header name=next
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused GlobalRecord at 0
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=renamed size=0 mode=0o644 data=""
+member listed=- path=renamed size=0 mode=0o644 data=""
+warning "tar: Skipping to next header"
+warning "tar: Skipping to next header"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'size'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=renamed size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=renamed size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=g path=renamed size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=gfile size=600 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="G"*600
+member type=0 path=next size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

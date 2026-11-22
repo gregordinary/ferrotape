@@ -1,0 +1,23 @@
+[statement]
+A stream that ends after a pax header, before the member it describes, is
+malformed, and ferrotape refuses it.
+
+[archive]
+pax path=dangling
+
+[verdict]
+all: refused Truncated at 1024
+
+[gnu-tar 1.35]
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Damaged tar archive (end-of-archive within a sequence of headers)"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+error "ReadError: empty header"
+
+[go 1.27.0]
+ok

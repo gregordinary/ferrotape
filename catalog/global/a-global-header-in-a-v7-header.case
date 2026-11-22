@@ -1,0 +1,33 @@
+[statement]
+A v7 header (no magic) with typeflag `g` is a global header to every reader,
+and is read as one in each mode.
+
+[archive]
+header name=v7g typeflag=g magic=v7
+records path=evilname
+header name=victim
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: read
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=evilname size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'path'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=evilname size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=evilname size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=victim size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

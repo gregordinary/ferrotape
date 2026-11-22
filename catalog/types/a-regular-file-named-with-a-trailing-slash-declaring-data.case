@@ -1,0 +1,36 @@
+[statement]
+A regular member whose name ends in `/` and which declares data. bsdtar reads
+it as a directory with no data, then reads its data as headers until it finds
+one, so the readers frame the archive differently. ferrotape refuses it.
+
+[archive]
+header name=d3/ typeflag=0
+data "abcde"
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: refused DirectoryWithData at 0
+
+[gnu-tar 1.35]
+member listed=d path=d3/ size=5 mode=0o644
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=d3/ size=5 mode=0o644
+member listed=- path=after size=6 mode=0o644
+warning "bsdtar: Damaged tar archive (bad header checksum)"
+warning "bsdtar: Retrying..."
+exit 0
+
+[python 3.12.3]
+member type=0 path=d3/ size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="abcde"
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=d3/ size=5 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="abcde"
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

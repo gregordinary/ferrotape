@@ -1,0 +1,35 @@
+[statement]
+GNU's dumpdir (typeflag `D`) lists a directory's contents in an incremental
+dump. GNU tar and bsdtar read it as a directory, and Python and Go as a member
+of an unknown type; on its type ferrotape follows GNU tar and bsdtar. Its
+data is read as data.
+
+[archive]
+header name=dumpdir/ typeflag=D magic=gnu
+data "Yfile\0\0"
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=d path=dumpdir/ size=7 mode=0o644
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=dumpdir/ size=7 mode=0o644
+member listed=- path=after size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=D path=dumpdir/ size=7 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="Yfile\0\0"
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=D path=dumpdir/ size=7 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="Yfile\0\0"
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

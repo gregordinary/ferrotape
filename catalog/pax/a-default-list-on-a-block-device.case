@@ -1,0 +1,36 @@
+[statement]
+A default access control list belongs to a directory: the kernel refuses one
+on any other kind of file, and neither GNU tar nor bsdtar writes one there.
+bsdtar takes the mode of a block device carrying one from the lists' text,
+and lists and extracts it with mode 000; GNU tar, Go and Python read the
+header's mode. ferrotape refuses it at both levels.
+
+[archive]
+pax SCHILY.acl.default=user::rwx,group::r-x,other::r-x
+header name=b typeflag=4 devmajor=8 devminor=0
+header name=after
+data "y"
+end
+
+[verdict]
+all: refused DefaultAclWithoutDirectory at 1024
+
+[gnu-tar 1.35]
+member listed=b path=b device=8,0 mode=0o644
+member listed=- path=after size=1 mode=0o644 data="y"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=b path=b device=8,0 mode=0o0
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=4 path=b size=0 device=8,0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=4 path=b size=0 device=8,0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

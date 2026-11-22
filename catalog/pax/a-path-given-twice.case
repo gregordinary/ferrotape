@@ -1,0 +1,31 @@
+[statement]
+A pax header giving `path` twice, with different values. POSIX says the last
+takes precedence, and the reference readers take the last; some Rust readers
+take the first. In Strict, ferrotape refuses a keyword repeated with
+different values; in Compatible, it takes the last.
+
+[archive]
+pax path=first path=second
+header name=hdr
+data "hello\n"
+end
+
+[verdict]
+strict: refused RepeatedKeyword at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=second size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=second size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=second size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=second size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

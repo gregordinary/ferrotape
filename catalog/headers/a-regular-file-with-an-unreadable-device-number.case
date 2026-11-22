@@ -1,0 +1,26 @@
+[statement]
+The device fields of every header with magic are read, whatever its type, and
+one that does not parse is malformed. bsdtar, Python and Go refuse this
+regular file's, GNU tar reads past it, and ferrotape refuses the archive.
+
+[archive]
+header name=reg devmajor="zzzzzzz\0"
+data "r\n"
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+member listed=- path=reg size=2 mode=0o644 data="r\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

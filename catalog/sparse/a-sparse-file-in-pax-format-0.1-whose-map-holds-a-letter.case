@@ -1,0 +1,34 @@
+[statement]
+A format 0.1 map holding a letter. Each reader reads it otherwise, or not
+at all. Refused at both levels.
+
+[archive]
+pax GNU.sparse.size=2048 GNU.sparse.numblocks=2 GNU.sparse.name=sp GNU.sparse.map=1024,5x2,2048,0
+header name=GNUSparseFile.0/sp typeflag=0 size=512
+data "S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused Sparse(Number) at 1024
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="\0"*1024"SSSSS"
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+warning "tar: Malformed extended header: invalid GNU.sparse.map: unexpected delimiter x"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=sp size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+warning "bsdtar: Malformed sparse map data"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+error "ValueError: invalid literal for int() with base 10: '5x2'"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

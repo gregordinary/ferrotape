@@ -1,0 +1,45 @@
+[statement]
+A global header setting `path` after the first member. GNU tar and Python
+apply it to the members after it; Go applies none; bsdtar lists the first
+member and refuses the archive from the header on. In `defer`, ferrotape
+reads as Go does.
+
+[archive]
+header name=a
+data "x"
+global path=renamed
+header name=b
+data "y"
+header name=c
+data "z"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 1024
+apply: read
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=a size=1 mode=0o644 data="x"
+member listed=- path=renamed size=1 mode=0o644 data="y"
+member listed=- path=renamed size=1 mode=0o644 data="z"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=a size=1 mode=0o644
+warning "bsdtar: Unsupported pax global extended header attribute 'path'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=renamed size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+member type=0 path=renamed size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="z"
+ok
+
+[go 1.27.0]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=g path=renamed size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=b size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+member type=0 path=c size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="z"
+ok

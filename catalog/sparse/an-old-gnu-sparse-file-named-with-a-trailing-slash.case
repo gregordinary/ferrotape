@@ -1,0 +1,35 @@
+[statement]
+An old GNU sparse file named with a trailing slash: GNU tar and bsdtar
+extract a directory, Python and Go a file. Refused at both levels.
+
+[archive]
+header name=sp/ typeflag=S magic=gnu size=512 @386="0"*7"2000\0""0"*7"1000\0""0"*7"4000\0""0"*11"\0"*49 @483="0"*7"4000\0"
+data "S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused Sparse(Name) at 0
+
+[gnu-tar 1.35]
+member listed=d path=sp/ size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=sp/ size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+warning "bsdtar: Damaged tar archive (bad header checksum)"
+warning "bsdtar: Retrying..."
+exit 0
+
+[python 3.12.3]
+member type=S path=sp/ size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=S path=sp/ size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

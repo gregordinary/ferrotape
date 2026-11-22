@@ -1,0 +1,34 @@
+[statement]
+A pax extended header with no records. bsdtar fails on it, extracting
+nothing after it; GNU tar, Python and Go read on. ferrotape refuses it.
+
+[archive]
+header name=PaxHeader typeflag=x
+header name=a
+data "x"
+header name=b
+data "y"
+end
+
+[verdict]
+all: refused EmptyMetadata at 0
+
+[gnu-tar 1.35]
+member listed=- path=a size=1 mode=0o644 data="x"
+member listed=- path=b size=1 mode=0o644 data="y"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Invalid empty pax extended header"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=b size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=b size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

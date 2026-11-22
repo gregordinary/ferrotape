@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose something ferrotape does not do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do with an archive, and where ferrotape stops you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: >
+        An API, a tar dialect or extension ferrotape does not read or write, a
+        record it does not report: whatever shape you imagine. A sketch is
+        enough; the shape is discussable.
+  - type: textarea
+    id: material
+    attributes:
+      label: Where it is needed
+      description: >
+        The tools, archives or writers that need it, and what they do with
+        such an archive.

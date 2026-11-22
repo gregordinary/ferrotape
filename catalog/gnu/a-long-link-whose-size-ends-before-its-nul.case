@@ -1,0 +1,30 @@
+[statement]
+A GNU long link whose size ends before its NUL: the size says one byte and
+the block holds `abc` and a NUL. GNU tar and Python read the target on into
+the padding, to the NUL (`abc`); bsdtar and Go read as far as the size (`a`).
+ferrotape refuses it.
+
+[archive]
+header name=././@LongLink typeflag=K magic=gnu size=1
+data "tgt\0"
+header name=lnk typeflag=2 linkname=hdrlink
+end
+
+[verdict]
+all: refused LongNameOverrun at 0
+
+[gnu-tar 1.35]
+member listed=l path=lnk link=tgt size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=lnk link=t size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=lnk link=tgt size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=2 path=lnk link=t size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

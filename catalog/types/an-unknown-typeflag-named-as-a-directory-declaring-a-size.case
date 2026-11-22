@@ -1,0 +1,36 @@
+[statement]
+A member of typeflag `N`, which GNU tar does not know, named with a
+trailing slash and declaring a body that holds a header. bsdtar reads a
+directory with no data and lists the header in the body; GNU tar, Python and
+Go read the body as data. ferrotape refuses it.
+
+[archive]
+header name=n/ typeflag=N size=512
+header name=smuggled
+header name=after
+data "x"
+end
+
+[verdict]
+all: refused UnknownTypeSlash at 0
+
+[gnu-tar 1.35]
+member listed=? path=n/ size=512 mode=0o644 note="unknown file type 'N'"
+member listed=- path=after size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=n/ size=512 mode=0o644
+member listed=- path=smuggled size=0 mode=0o644
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=N path=n/ size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:a04e93973bd960c0
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=N path=n/ size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:a04e93973bd960c0
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

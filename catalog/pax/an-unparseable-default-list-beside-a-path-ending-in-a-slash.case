@@ -1,0 +1,36 @@
+[statement]
+A `SCHILY.acl.default` record bsdtar cannot parse, beside a `path` ending
+in a slash over a regular file. bsdtar reports the record and lists a
+regular file; GNU tar lists a directory. ferrotape refuses it.
+
+[archive]
+pax SCHILY.acl.default=smuggled path=d/
+header name=f
+header name=a
+data "x"
+end
+
+[verdict]
+all: refused DirectoryWithRecord at 1024
+
+[gnu-tar 1.35]
+member listed=d path=d/ size=0 mode=0o644
+member listed=- path=a size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=d/ size=0 mode=0o0
+member listed=- path=a size=1 mode=0o644
+warning "bsdtar: Parse error: SCHILY.acl.default"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=d size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=d/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

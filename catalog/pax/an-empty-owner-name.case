@@ -1,0 +1,28 @@
+[statement]
+A pax `uname` record with an empty value. GNU tar and Python report an empty
+name, and bsdtar and Go the header's. ferrotape refuses it.
+
+[archive]
+pax uname=""
+header name=a uname=hdruser
+data "hello\n"
+end
+
+[verdict]
+all: refused EmptyPaxValue at 0
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=a size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=hdruser gname=root data="hello\n"
+ok

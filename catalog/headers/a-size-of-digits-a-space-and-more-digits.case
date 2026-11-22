@@ -1,0 +1,30 @@
+[statement]
+A size field holding octal digits, a space and more digits, filling the
+field with no NUL, in the archive's first header. GNU tar reads the first
+digits; bsdtar does not recognize the archive, and Python and Go refuse it.
+ferrotape refuses it.
+
+[archive]
+header name=odd size="000006 00007"
+data "hello\n"
+header name=tail
+data "tail\n"
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+member listed=- path=odd size=6 mode=0o644 data="hello\n"
+member listed=- path=tail size=5 mode=0o644 data="tail\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

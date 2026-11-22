@@ -1,0 +1,45 @@
+[statement]
+A symbolic link declaring a size, its body holding two headers. POSIX
+requires a link's size to be zero. The reference readers read no data and list
+the two headers as members; some Rust readers read them as data. In Strict,
+ferrotape refuses the archive; in Compatible, it reads the link with no data.
+
+[archive]
+header name=lnk typeflag=2 linkname=target size=1024
+header name=smuggled-l1
+header name=smuggled-l2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused SizeWithoutData at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=l path=lnk link=target size=0 mode=0o644
+member listed=- path=smuggled-l1 size=0 mode=0o644 data=""
+member listed=- path=smuggled-l2 size=0 mode=0o644 data=""
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=lnk link=target size=0 mode=0o644
+member listed=- path=smuggled-l1 size=0 mode=0o644
+member listed=- path=smuggled-l2 size=0 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=lnk link=target size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=smuggled-l1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-l2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=2 path=lnk link=target size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-l1 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=smuggled-l2 size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

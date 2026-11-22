@@ -1,0 +1,27 @@
+[statement]
+A v7 header's typeflag may be NUL, which every reader reads as a regular
+file.
+
+[archive]
+header name=v7nul magic=v7 typeflag="\0"
+data "v7\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=v7nul size=3 mode=0o644 data="v7\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=v7nul size=3 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type="\0" path=v7nul size=3 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v7\n"
+ok
+
+[go 1.27.0]
+member type=0 path=v7nul size=3 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v7\n"
+ok

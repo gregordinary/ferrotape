@@ -1,0 +1,32 @@
+[statement]
+A symbolic link whose header names no target. Every reader reads the empty
+target, and so does ferrotape.
+
+[archive]
+header name=s typeflag=2
+header name=a
+data "x"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=l path=s link="" size=0 mode=0o644
+member listed=- path=a size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=s link="" size=0 mode=0o644
+member listed=- path=a size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=s size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=2 path=s size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

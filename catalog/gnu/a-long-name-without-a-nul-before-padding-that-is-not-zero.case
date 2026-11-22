@@ -1,0 +1,32 @@
+[statement]
+A GNU long name of three bytes holding no NUL, the padding after it
+beginning with a byte that is not NUL. GNU tar and Python read the name on
+into the padding (`abcz`); bsdtar and Go read as far as the size (`abc`).
+ferrotape refuses it.
+
+[archive]
+header name=././@LongLink typeflag=L magic=gnu size=3
+bytes "abcz"
+bytes "\0"*508
+header name=hdr
+data "x"
+end
+
+[verdict]
+all: refused LongNameOverrun at 0
+
+[gnu-tar 1.35]
+member listed=- path=abcz size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=abc size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=abcz size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=abc size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

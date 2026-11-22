@@ -1,0 +1,31 @@
+[statement]
+A global header holding only a `comment`, as `git archive` writes one with the
+commit's id. It changes no member, so it is read in every mode, and its record
+reaches the caller.
+
+[archive]
+header name=pax_global_header typeflag=g
+records comment=0123456789abcdef0123456789abcdef01234567
+header name=a
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=a size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=pax_global_header size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

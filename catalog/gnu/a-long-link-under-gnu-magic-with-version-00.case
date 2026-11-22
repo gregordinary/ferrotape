@@ -1,0 +1,31 @@
+[statement]
+A GNU long link whose header has GNU's magic with the version `00`, before
+a symbolic link. The four reference readers link to the long link's target;
+the `tar` and `tar-core` crates read it as a member of its own and link to
+the header's. Strict refuses it, and Compatible applies it.
+
+[archive]
+header name=././@LongLink typeflag=K magic=gnu @263="00"
+data "longtarget\0"
+header name=lnk typeflag=2 linkname=hdrtarget
+end
+
+[verdict]
+strict: refused MetadataWithoutMagic at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=l path=lnk link=longtarget size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=lnk link=longtarget size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=lnk link=longtarget size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=2 path=lnk link=longtarget size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

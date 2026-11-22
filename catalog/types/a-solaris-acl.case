@@ -1,0 +1,37 @@
+[statement]
+Solaris's access control list (typeflag `A`), here with a body that is not a
+well-formed list. bsdtar reads it as metadata for the next member, not a
+member, and the other readers as a member with data, so the readers disagree
+on the members. ferrotape refuses it.
+
+[archive]
+header name=tA typeflag=A size=1024
+header name=sA1
+header name=sA2
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused SolarisAcl at 0
+
+[gnu-tar 1.35]
+member listed=? path=tA size=1024 mode=0o644 data=1024:25344eb32bef7699 note="unknown file type 'A'"
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=tail size=6 mode=0o644
+warning "bsdtar: Malformed Solaris ACL attribute (invalid digit)"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=A path=tA size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:25344eb32bef7699
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=A path=tA size=1024 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=1024:25344eb32bef7699
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

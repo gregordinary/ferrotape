@@ -1,0 +1,31 @@
+[statement]
+A v7 header, first in the archive, holding `xx` at its device fields.
+Python and bsdtar refuse the archive; GNU tar and Go read it. ferrotape
+refuses it, as it refuses the same header after a member.
+
+[archive]
+header name=b magic=v7 @329="xx"
+data "y"
+header name=c
+data "z"
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+member listed=- path=b size=1 mode=0o644 data="y"
+member listed=- path=c size=1 mode=0o644 data="z"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+member type=0 path=b size=1 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="y"
+member type=0 path=c size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="z"
+ok

@@ -1,0 +1,29 @@
+[statement]
+A stream whose first block has neither magic nor a checksum that matches is
+not a tar archive: here, the signature of a PNG image followed by zeros.
+ferrotape reports that the stream is not a tar archive, which a caller can
+tell apart from a damaged one.
+
+[archive]
+bytes "\x89PNG\r\n\x1a\n"
+bytes "\0"*1016
+
+[verdict]
+all: refused NotATar at 0
+
+[gnu-tar 1.35]
+warning "tar: This does not look like a tar archive"
+warning "tar: Skipping to next header"
+warning "tar: A lone zero block at 2"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: bad checksum"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

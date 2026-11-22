@@ -1,0 +1,145 @@
+name: Drift
+
+# What each reference reader's newest release reads from the catalog's cases,
+# against the readings recorded from the pinned releases.
+#
+# Its own workflow rather than a job in CI, because it reaches the network
+# for whatever the readers' projects have released. A reader changes when its
+# project releases, not when a pull request changes this code, so it runs on a
+# schedule and never on a pull request.
+on:
+  schedule:
+    # Weekly, early on a Monday.
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # The pins, as ci.yml's readers job holds them.
+  GNU_TAR_VERSION: "1.35"
+  GNU_TAR_PACKAGE: 1.35+dfsg-3ubuntu0.4
+  PYTHON_PACKAGE: 3.12.3-1ubuntu0.17
+  LIBARCHIVE_VERSION: 3.8.11
+  GO_VERSION: 1.27.0
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Bash with `-eo pipefail`: a step fails where any command of a pipeline
+    # fails, not only its last.
+    shell: bash
+
+jobs:
+  newest:
+    name: The catalog read by each reader's newest release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned)
+        run: rustup show
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install libacl's headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libacl1-dev
+      - name: Install Python's newest release
+        id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: 3.x
+          check-latest: true
+          update-environment: false
+      - name: Install the newest releases of GNU tar, libarchive and Go
+        # Each release is found and checked as its project publishes it
+        # (harness/readers.sh). GNU tar's release is built only where it is
+        # newer than the pin: Ubuntu's 1.35 carries fixes GNU's 1.35 release
+        # does not, which change what it reads, so GNU's 1.35 would report
+        # the same differences every week.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PYTHON_PATH: ${{ steps.python.outputs.python-path }}
+        run: |
+          for reader in gnu-tar libarchive go; do
+            found=$(harness/readers.sh newest "$reader")
+            read -r version digest <<< "$found"
+            echo "$reader $version" | tee --append newest.txt
+            if [ "$reader" = gnu-tar ] && [ "$version" = "$GNU_TAR_VERSION" ]; then
+              echo "FERROTAPE_GNU_TAR=/usr/bin/tar" >> "$GITHUB_ENV"
+              continue
+            fi
+            harness/readers.sh install "$reader" "$version" "$digest" "$RUNNER_TEMP/$reader"
+          done
+          {
+            if [ -x "$RUNNER_TEMP/gnu-tar/bin/tar" ]; then
+              echo "FERROTAPE_GNU_TAR=$RUNNER_TEMP/gnu-tar/bin/tar"
+            fi
+            echo "FERROTAPE_BSDTAR=$RUNNER_TEMP/libarchive/bin/bsdtar"
+            echo "FERROTAPE_GO=$RUNNER_TEMP/go/go/bin/go"
+            echo "FERROTAPE_PYTHON=$PYTHON_PATH"
+          } >> "$GITHUB_ENV"
+      - name: Read every case with them
+        # `check` exits 1 where a reading changed. That is the finding, kept
+        # for the report rather than stopping the run here.
+        run: |
+          status=0
+          cargo run --release -p ferrotape-harness -- check --unpinned catalog \
+            > changes.txt 2> checked.txt || status=$?
+          cat checked.txt
+          echo "CHECK_STATUS=$status" >> "$GITHUB_ENV"
+      - name: Write the report
+        run: |
+          tar_package=$(dpkg-query --show --showformat '${Version}' tar)
+          python_package=$(dpkg-query --show --showformat '${Version}' libpython3.12-stdlib)
+          {
+            echo "# Readers"
+            echo
+            echo "Pinned: GNU tar $GNU_TAR_VERSION (Ubuntu's $GNU_TAR_PACKAGE), bsdtar $LIBARCHIVE_VERSION,"
+            echo "Python 3.12.3 (Ubuntu's $PYTHON_PACKAGE), Go $GO_VERSION."
+            echo
+            echo "Newest releases:"
+            echo
+            sed 's/^/- /' newest.txt
+            echo "- python $("$FERROTAPE_PYTHON" -I -c 'import platform; print(platform.python_version())')"
+            echo
+            echo "Ubuntu's packages on this runner: tar $tar_package, libpython3.12-stdlib $python_package."
+            if [ "$tar_package" != "$GNU_TAR_PACKAGE" ] || [ "$python_package" != "$PYTHON_PACKAGE" ]; then
+              echo "A pinned package has moved: the pull request job now reads with it."
+            fi
+            echo
+            echo "# Readings that changed"
+            echo
+            case $CHECK_STATUS in
+              0) echo "None." ;;
+              1) echo '```'; cat changes.txt; echo '```' ;;
+              *) echo "The check did not run to the end:"; echo '```'; cat checked.txt; echo '```' ;;
+            esac
+          } > report.md
+          head -c 100000 report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: drift
+          path: |
+            report.md
+            changes.txt
+            checked.txt
+      - name: Fail where a reading or a pinned package changed
+        # Gates nothing: a failed scheduled run is what tells a maintainer
+        # that a reader has moved. The report says how. The answer is a
+        # measurement of the new release, and a decision on moving the pin,
+        # with each case's readings recorded again.
+        run: |
+          if [ "$CHECK_STATUS" != 0 ]; then
+            echo "A reader's newest release reads a case otherwise; see the report."
+            exit 1
+          fi
+          if [ "$(dpkg-query --show --showformat '${Version}' tar)" != "$GNU_TAR_PACKAGE" ] ||
+             [ "$(dpkg-query --show --showformat '${Version}' libpython3.12-stdlib)" != "$PYTHON_PACKAGE" ]; then
+            echo "A pinned Ubuntu package has moved; see the report."
+            exit 1
+          fi

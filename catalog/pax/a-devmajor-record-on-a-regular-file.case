@@ -1,0 +1,36 @@
+[statement]
+A regular file carrying a pax `SCHILY.devmajor` record, which no reader
+gives a regular file's numbers from. Every reader reads it alike, and so
+does ferrotape.
+
+[archive]
+pax SCHILY.devmajor=9
+header name=f
+data "x"
+header name=after
+data "y"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=f size=1 mode=0o644 data="x"
+member listed=- path=after size=1 mode=0o644 data="y"
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.devmajor'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=1 mode=0o644
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=0 path=f size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

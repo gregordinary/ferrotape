@@ -1,0 +1,31 @@
+[statement]
+Two pax headers before one member. GNU tar and Go apply the last, Python the
+first or both, and bsdtar refuses the archive. ferrotape refuses a second pax
+header, long name or long link before a member.
+
+[archive]
+pax path=first
+pax mtime=100
+header name=plain
+data "hello\n"
+end
+
+[verdict]
+all: refused RepeatedMetadata at 1024
+
+[gnu-tar 1.35]
+member listed=- path=plain size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Redundant 'x' header"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=first size=6 mode=0o644 mtime=100 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=plain size=6 mode=0o644 mtime=100 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

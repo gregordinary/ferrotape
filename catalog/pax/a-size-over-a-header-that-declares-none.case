@@ -1,0 +1,34 @@
+[statement]
+A pax `size` record of 512 over a header declaring none: the next block is
+the member's data, though it holds a header, and every reader reads it so.
+
+[archive]
+pax size=512
+header name=outer size=0
+header name=smuggled
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=outer size=512 mode=0o644 data=512:a04e93973bd960c0
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=outer size=512 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=outer size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:a04e93973bd960c0
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=outer size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:a04e93973bd960c0
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

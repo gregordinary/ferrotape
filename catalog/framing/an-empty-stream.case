@@ -1,0 +1,25 @@
+[statement]
+A stream that ends before its first header holds no archive. GNU tar and
+Python report that it is not one, and bsdtar and Go read an empty archive.
+ferrotape reports that it is not a tar archive, as for bytes that are not
+one.
+
+[archive]
+# No bytes at all.
+
+[verdict]
+all: refused NotATar at 0
+
+[gnu-tar 1.35]
+warning "tar: This does not look like a tar archive"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+exit 0
+
+[python 3.12.3]
+error "ReadError: empty file"
+
+[go 1.27.0]
+ok

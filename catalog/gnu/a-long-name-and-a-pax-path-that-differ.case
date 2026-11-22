@@ -1,0 +1,31 @@
+[statement]
+A GNU long name and a pax `path` for one member, naming it differently. GNU
+tar and bsdtar take the pax path, and Python and Go the long name. ferrotape
+refuses the archive; where the two agree, every reader names the member
+alike, and it is read.
+
+[archive]
+longname gnu-long-name
+pax path=pax-path
+header name=short
+data "hello\n"
+end
+
+[verdict]
+all: refused LongNameConflict at 2048
+
+[gnu-tar 1.35]
+member listed=- path=pax-path size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=pax-path size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=gnu-long-name size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=gnu-long-name size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

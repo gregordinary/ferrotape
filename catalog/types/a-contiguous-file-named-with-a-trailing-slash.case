@@ -1,0 +1,33 @@
+[statement]
+A contiguous file (typeflag `7`) whose name ends in `/`. GNU tar lists a
+contiguous file and extracts a directory, and bsdtar lists a directory: the
+member is a directory, as for typeflag `0`.
+
+[archive]
+header name=c7dir/ typeflag=7
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=C path=c7dir/ size=0 mode=0o644
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=c7dir/ size=0 mode=0o644
+member listed=- path=after size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=7 path=c7dir/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=7 path=c7dir/ size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

@@ -1,0 +1,39 @@
+[statement]
+A pax `hdrcharset` naming neither of POSIX's character sets, over a regular
+file. bsdtar reports an error and reads on; every reader lists the same
+members. ferrotape refuses any other value, since beside a path ending in a
+slash the readers part ways.
+
+[archive]
+pax hdrcharset=6 path=f
+header name=x
+data "hi"
+header name=after
+data "x"
+end
+
+[verdict]
+all: refused UnknownCharset at 0
+
+[gnu-tar 1.35]
+member listed=- path=f size=2 mode=0o644 data="hi"
+member listed=- path=after size=1 mode=0o644 data="x"
+warning "tar: Ignoring unknown extended header keyword 'hdrcharset'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=2 mode=0o644
+member listed=- path=after size=1 mode=0o644
+warning "bsdtar: (null)"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=f size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hi"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=f size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hi"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

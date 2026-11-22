@@ -1,0 +1,29 @@
+[statement]
+A numeric field that is neither octal nor base-256 is malformed, and
+ferrotape refuses the archive at its header, whatever a reader recovers from
+it.
+
+[archive]
+header name=badsize size="0000000x005\0"
+data "12345"
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+warning "tar: Archive contains '0000000x005' where numeric off_t value expected"
+warning "tar: This does not look like a tar archive"
+warning "tar: Skipping to next header"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

@@ -1,0 +1,34 @@
+[statement]
+A member after the end marker. Every reference reader stops at the marker,
+and GNU tar with `--ignore-zeros` reads on into the member. ferrotape never
+reads past the marker as archive. In Strict, `finish` refuses anything but
+zeros after it, which refuses archives joined with `cat`; in Compatible it
+does not.
+
+[archive]
+header name=real
+data "hello\n"
+end
+header name=ghost
+data "hello\n"
+end
+
+[verdict]
+strict: refused TrailingData at 2048
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=real size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=real size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=real size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=real size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

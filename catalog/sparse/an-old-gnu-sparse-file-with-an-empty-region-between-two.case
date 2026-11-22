@@ -1,0 +1,32 @@
+[statement]
+An empty region between two regions holding data. Read at both levels.
+
+[archive]
+header name=sp typeflag=S magic=gnu size=1024 @386="0"*11"\0""0"*7"1000\0""0"*7"2000\0""0"*11"\0""0"*7"3000\0""0"*7"1000""\0"*25 @483="0"*7"4000\0"
+data "S"*512"U"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="S"*512"\0"*1024"U"*512
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=sp size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="S"*512"\0"*1024"U"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="S"*512"\0"*1024"U"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

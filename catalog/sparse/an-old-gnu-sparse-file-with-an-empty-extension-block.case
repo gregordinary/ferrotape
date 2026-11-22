@@ -1,0 +1,37 @@
+[statement]
+An old GNU header with its extension flag set and one region, then an
+extension block with no slot used. GNU tar fails; the others read the
+region. Refused at both levels.
+
+[archive]
+header name=sp typeflag=S magic=gnu size=512 @386="0"*7"2000\0""0"*7"1000\0""0"*7"4000\0""0"*11"\0"*49 @482="\x01" @483="0"*7"4000\0"
+bytes "\0"*512
+data "S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: refused Sparse(Extension) at 0
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="\0"*2048
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+warning "tar: Skipping to next header"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=sp size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=S path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

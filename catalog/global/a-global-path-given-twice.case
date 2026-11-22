@@ -1,0 +1,36 @@
+[statement]
+A global header giving `path` twice, with different values. GNU tar applies
+the first and Python the last, so the mode that applies global records
+refuses it at both levels; Strict refuses the repeated keyword in every mode,
+as it does in a member's own header. bsdtar refuses the global header, and Go
+applies none, which Compatible's `defer` reads as Go does.
+
+[archive]
+global path=one path=two
+header name=a
+data "x"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused RepeatedKeyword at 0
+strict defer: refused RepeatedKeyword at 0
+compatible defer: read
+
+[gnu-tar 1.35]
+member listed=- path=one size=1 mode=0o644 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'path'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=two size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=g path=two size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

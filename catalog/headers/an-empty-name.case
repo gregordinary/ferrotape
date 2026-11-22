@@ -1,0 +1,34 @@
+[statement]
+A member whose path is empty. GNU tar substitutes `.`, bsdtar skips the
+member, and Python and Go keep an empty name. ferrotape refuses the archive.
+
+[archive]
+header name=""
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: refused EmptyName at 0
+
+[gnu-tar 1.35]
+member listed=- path="" size=0 mode=0o644
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+warning "tar: Substituting `.' for empty member name"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=after size=6 mode=0o644
+warning "bsdtar: Archive entry has empty or unreadable filename ... skipping"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path="" size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path="" size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

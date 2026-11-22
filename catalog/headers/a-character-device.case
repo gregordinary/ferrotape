@@ -1,0 +1,25 @@
+[statement]
+A character device and its numbers, read alike by every reader.
+
+[archive]
+header name=chr typeflag=3 devmajor=1 devminor=3
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=c path=chr device=1,3 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=c path=chr device=1,3 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=3 path=chr size=0 device=1,3 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=3 path=chr size=0 device=1,3 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

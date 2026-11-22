@@ -1,0 +1,30 @@
+[statement]
+A pax `path` record with an empty value. GNU tar, bsdtar and Go read it as
+deleting the record, as POSIX specifies, and name the member from its header;
+Python names it with an empty path. ferrotape refuses an empty value of any
+keyword it applies.
+
+[archive]
+pax path=""
+header name=hdrname
+data "hello\n"
+end
+
+[verdict]
+all: refused EmptyPaxValue at 0
+
+[gnu-tar 1.35]
+member listed=- path=hdrname size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=hdrname size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path="" size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=hdrname size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

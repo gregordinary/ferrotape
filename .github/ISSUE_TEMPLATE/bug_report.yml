@@ -1,0 +1,52 @@
+name: Bug report
+description: Report an archive ferrotape reads or writes otherwise than GNU tar, bsdtar, Go or Python, or another defect.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report a security issue here. Use the private channel
+        described in
+        [SECURITY.md](https://github.com/gregordinary/ferrotape/blob/main/SECURITY.md).
+
+        The cases where ferrotape reads an archive otherwise than a reference
+        reader on purpose are listed in its documentation; a case it lists is
+        not a new defect.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: The archive
+      description: >
+        Attach the archive, or a short program that writes it, and give the
+        settings ferrotape read it with. Where the archive cannot be shared,
+        a hex dump of the headers involved often serves.
+    validations:
+      required: true
+  - type: textarea
+    id: answers
+    attributes:
+      label: What the reference readers and ferrotape report
+      description: >
+        The member listing from GNU tar (`tar -tvf`), bsdtar (`bsdtar -tvf`),
+        Go's `archive/tar` or Python's `tarfile`, and what ferrotape
+        reported: its members, or the error.
+      render: text
+  - type: input
+    id: references
+    attributes:
+      label: Reference versions
+      description: The versions of the readers you compared with.
+  - type: input
+    id: version
+    attributes:
+      label: ferrotape version
+      description: The commit or crate version.
+    validations:
+      required: true

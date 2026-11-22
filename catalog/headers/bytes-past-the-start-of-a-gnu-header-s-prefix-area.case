@@ -1,0 +1,28 @@
+[statement]
+Where the byte at offset 345 of a GNU header is NUL, every reader names the
+member from its name field alone, whatever follows (here, GNU's multi-volume
+offset), and so does ferrotape.
+
+[archive]
+header name=gnuname magic=gnu @369="00000001000\0"
+data "g\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=gnuname size=2 mode=0o644 data="g\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=gnuname size=2 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=gnuname size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="g\n"
+ok
+
+[go 1.27.0]
+member type=0 path=gnuname size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="g\n"
+ok

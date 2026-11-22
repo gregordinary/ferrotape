@@ -1,0 +1,28 @@
+[statement]
+A header whose checksum matches neither the unsigned nor the signed sum is
+malformed, and ferrotape refuses the archive at it, whatever a reader
+recovers from it.
+
+[archive]
+header name=bad checksum=bad
+data "x\n"
+end
+
+[verdict]
+all: refused Checksum at 0
+
+[gnu-tar 1.35]
+warning "tar: This does not look like a tar archive"
+warning "tar: Skipping to next header"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: bad checksum"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

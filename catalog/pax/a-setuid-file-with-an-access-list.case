@@ -1,0 +1,37 @@
+[statement]
+A setuid file carrying an access control list. GNU tar, Python and Go list
+mode 4755, and GNU tar extracts it with setuid; bsdtar lists 745, the mode
+it takes from the list, and extracts it without setuid. Strict refuses it;
+Compatible reads the header's mode, as GNU tar extracts it.
+
+[archive]
+pax SCHILY.acl.access=user::rwx,user:65534:r--,group::r--,mask::r-x,other::r-x
+header name=f mode=0o4755
+data "x"
+header name=after
+data "y"
+end
+
+[verdict]
+strict: refused SpecialBitsWithAcl at 1024
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=f size=1 mode=0o4755 data="x"
+member listed=- path=after size=1 mode=0o644 data="y"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=1 mode=0o745
+member listed=- path=after size=1 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=1 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok
+
+[go 1.27.0]
+member type=0 path=f size=1 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=0 path=after size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="y"
+ok

@@ -1,0 +1,38 @@
+[statement]
+A sparse file in GNU's pax format 0.0: `GNU.sparse.size`,
+`GNU.sparse.numblocks`, and `GNU.sparse.offset` and `GNU.sparse.numbytes` in
+pairs, the header naming the file. Compatible reads it as every reader
+extracts it. Strict refuses it: Rust's `tar` reads a file of that name
+holding the regions' bytes alone.
+
+[archive]
+pax GNU.sparse.size=2048 GNU.sparse.numblocks=2 GNU.sparse.offset=1024 GNU.sparse.numbytes=512 GNU.sparse.offset=2048 GNU.sparse.numbytes=0
+header name=sp typeflag=0 size=512
+data "S"*512
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused RepeatedKeyword at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="\0"*1024"S"*512"\0"*512
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=sp size=2048 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="\0"*1024"S"*512"\0"*512
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

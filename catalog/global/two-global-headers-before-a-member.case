@@ -1,0 +1,36 @@
+[statement]
+Two global headers before a member: a `uid`, then an `mtime`. GNU tar
+replaces the first with the second, Python merges them, as POSIX specifies,
+and bsdtar refuses the archive. A global header that arrives while metadata
+waits for its member is refused in every mode.
+
+[archive]
+global uid=1234
+global mtime=1000000
+header name=a uid=7 mtime=5
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: refused RepeatedMetadata at 1024
+defer: refused RepeatedMetadata at 1024
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'uid'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=1000000 uid=1234 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=a size=6 mode=0o644 mtime=5 uid=7 gid=0 uname=root gname=root data="hello\n"
+ok

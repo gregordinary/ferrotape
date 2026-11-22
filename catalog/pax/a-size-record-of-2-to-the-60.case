@@ -1,0 +1,34 @@
+[statement]
+A pax `size` record of 2^60 over a regular file. bsdtar stops at the member
+and Python fails on it; GNU tar and Go take it as the member's size, list
+the member, and fail where its data runs out. ferrotape refuses the record,
+at both levels.
+
+[archive]
+pax size=1152921504606846976
+header name=f
+data "x"
+header name=after
+data "y"
+end
+
+[verdict]
+all: refused PaxValue at 0
+
+[gnu-tar 1.35]
+member listed=- path=f size=1152921504606846976 mode=0o644 data=2560:29b350b6e82bfea0
+warning "tar: Unexpected EOF in archive"
+warning "tar: Error is not recoverable: exiting now"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Tar entry size overflow"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+error "MemoryError: "
+
+[go 1.27.0]
+member type=0 path=f size=1152921504606846976 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=2560:29b350b6e82bfea0
+error "unexpected EOF"

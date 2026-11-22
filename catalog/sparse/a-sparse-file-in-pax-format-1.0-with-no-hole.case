@@ -1,0 +1,35 @@
+[statement]
+A format 1.0 map of one region covering the whole file: bsdtar fails on a
+map leaving no hole. Refused at both levels.
+
+[archive]
+pax GNU.sparse.major=1 GNU.sparse.minor=0 GNU.sparse.name=sp GNU.sparse.realsize=2048
+header name=GNUSparseFile.0/sp typeflag=0 size=2560
+data "1\n0\n2048\n""\0"*503"S"*2048
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+strict: refused Sparse(PaxForm) at 1024
+compatible: refused Sparse(NoHole) at 1024
+
+[gnu-tar 1.35]
+member listed=- path=sp size=2048 mode=0o644 data="S"*2048
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Malformed sparse map data"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="S"*2048
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=sp size=2048 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="S"*2048
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

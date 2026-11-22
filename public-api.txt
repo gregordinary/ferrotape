@@ -1,0 +1,538 @@
+pub mod ferrotape
+pub mod ferrotape::differences
+#[non_exhaustive] pub enum ferrotape::EntryKind
+pub ferrotape::EntryKind::BlockDevice
+pub ferrotape::EntryKind::CharDevice
+pub ferrotape::EntryKind::Directory
+pub ferrotape::EntryKind::Fifo
+pub ferrotape::EntryKind::File
+pub ferrotape::EntryKind::HardLink
+pub ferrotape::EntryKind::Symlink
+impl core::fmt::Display for ferrotape::EntryKind
+pub fn ferrotape::EntryKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::EntryKind
+impl core::marker::Send for ferrotape::EntryKind
+impl core::marker::Sync for ferrotape::EntryKind
+impl core::marker::Unpin for ferrotape::EntryKind
+impl core::marker::UnsafeUnpin for ferrotape::EntryKind
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::EntryKind
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::EntryKind
+#[non_exhaustive] pub enum ferrotape::ErrorKind
+pub ferrotape::ErrorKind::Checksum
+pub ferrotape::ErrorKind::DefaultAclWithoutDirectory
+pub ferrotape::ErrorKind::DefaultAclWithoutDirectory::kind: ferrotape::EntryKind
+pub ferrotape::ErrorKind::DeviceConflict
+pub ferrotape::ErrorKind::DirectoryWithData
+pub ferrotape::ErrorKind::DirectoryWithRecord
+pub ferrotape::ErrorKind::DirectoryWithRecord::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::EmptyMetadata(ferrotape::Metadata)
+pub ferrotape::ErrorKind::EmptyName
+pub ferrotape::ErrorKind::EmptyPaxValue
+pub ferrotape::ErrorKind::EmptyPaxValue::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::EmptyXattr
+pub ferrotape::ErrorKind::EmptyXattr::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::EntryLimit
+pub ferrotape::ErrorKind::EntryLimit::limit: u64
+pub ferrotape::ErrorKind::EntryLimit::size: u64
+pub ferrotape::ErrorKind::FractionBeforeEpoch
+pub ferrotape::ErrorKind::FractionBeforeEpoch::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::GlobalBetweenMetadata
+pub ferrotape::ErrorKind::GlobalRecord
+pub ferrotape::ErrorKind::GlobalRecord::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::HardLinkWithoutTarget
+pub ferrotape::ErrorKind::HeaderField
+pub ferrotape::ErrorKind::HeaderField::field: ferrotape::HeaderField
+pub ferrotape::ErrorKind::HeaderField::problem: ferrotape::Numeric
+pub ferrotape::ErrorKind::Io
+pub ferrotape::ErrorKind::LongNameConflict
+pub ferrotape::ErrorKind::LongNameConflict::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::LongNameNul(ferrotape::Metadata)
+pub ferrotape::ErrorKind::LongNameOverrun(ferrotape::Metadata)
+pub ferrotape::ErrorKind::MetadataLimit
+pub ferrotape::ErrorKind::MetadataLimit::limit: u64
+pub ferrotape::ErrorKind::MetadataLimit::size: u64
+pub ferrotape::ErrorKind::MetadataWithoutMagic(ferrotape::Metadata)
+pub ferrotape::ErrorKind::NotAHeader
+pub ferrotape::ErrorKind::NotATar
+pub ferrotape::ErrorKind::PaxFraming(ferrotape::PaxFraming)
+pub ferrotape::ErrorKind::PaxNul
+pub ferrotape::ErrorKind::PaxNul::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::PaxValue
+pub ferrotape::ErrorKind::PaxValue::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::PaxValue::problem: ferrotape::Numeric
+pub ferrotape::ErrorKind::PrefixArea
+pub ferrotape::ErrorKind::PrefixSlash
+pub ferrotape::ErrorKind::RepeatedKeyword
+pub ferrotape::ErrorKind::RepeatedKeyword::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::RepeatedMetadata(ferrotape::Metadata)
+pub ferrotape::ErrorKind::SecondGlobal
+pub ferrotape::ErrorKind::SelinuxConflict
+pub ferrotape::ErrorKind::SizeWithoutData
+pub ferrotape::ErrorKind::SizeWithoutData::kind: ferrotape::EntryKind
+pub ferrotape::ErrorKind::SolarisAcl
+pub ferrotape::ErrorKind::SolarisExtendedHeader
+pub ferrotape::ErrorKind::Sparse(ferrotape::SparseFlaw)
+pub ferrotape::ErrorKind::SparseFields
+pub ferrotape::ErrorKind::SpecialBitsWithAcl
+pub ferrotape::ErrorKind::TargetWithoutLink
+pub ferrotape::ErrorKind::TargetWithoutLink::kind: ferrotape::EntryKind
+pub ferrotape::ErrorKind::TrailingData
+pub ferrotape::ErrorKind::TrailingLimit
+pub ferrotape::ErrorKind::TrailingLimit::limit: u64
+pub ferrotape::ErrorKind::Truncated(ferrotape::Truncation)
+pub ferrotape::ErrorKind::UnknownCharset
+pub ferrotape::ErrorKind::UnknownCharset::value: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::UnknownMagic
+pub ferrotape::ErrorKind::UnknownTypeSlash
+pub ferrotape::ErrorKind::UnknownTypeSlash::typeflag: u8
+pub ferrotape::ErrorKind::VolumeContinuation
+pub ferrotape::ErrorKind::VolumeLabel
+pub ferrotape::ErrorKind::XattrConflict
+pub ferrotape::ErrorKind::XattrConflict::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::XattrName
+pub ferrotape::ErrorKind::XattrName::keyword: alloc::vec::Vec<u8>
+impl core::fmt::Display for ferrotape::ErrorKind
+pub fn ferrotape::ErrorKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::ErrorKind
+impl core::marker::Send for ferrotape::ErrorKind
+impl core::marker::Sync for ferrotape::ErrorKind
+impl core::marker::Unpin for ferrotape::ErrorKind
+impl core::marker::UnsafeUnpin for ferrotape::ErrorKind
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::ErrorKind
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::ErrorKind
+#[non_exhaustive] pub enum ferrotape::GlobalHeaders
+pub ferrotape::GlobalHeaders::Apply
+pub ferrotape::GlobalHeaders::Defer
+pub ferrotape::GlobalHeaders::Refuse
+impl core::marker::Freeze for ferrotape::GlobalHeaders
+impl core::marker::Send for ferrotape::GlobalHeaders
+impl core::marker::Sync for ferrotape::GlobalHeaders
+impl core::marker::Unpin for ferrotape::GlobalHeaders
+impl core::marker::UnsafeUnpin for ferrotape::GlobalHeaders
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::GlobalHeaders
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::GlobalHeaders
+#[non_exhaustive] pub enum ferrotape::HeaderError
+pub ferrotape::HeaderError::DefaultAclWithoutDirectory
+pub ferrotape::HeaderError::DeviceOutOfRange
+pub ferrotape::HeaderError::DeviceOutOfRange::major: u32
+pub ferrotape::HeaderError::DeviceOutOfRange::minor: u32
+pub ferrotape::HeaderError::EmptyLinkTarget
+pub ferrotape::HeaderError::EmptyPath
+pub ferrotape::HeaderError::EmptyXattr
+pub ferrotape::HeaderError::EmptyXattr::name: alloc::vec::Vec<u8>
+pub ferrotape::HeaderError::FractionBeforeEpoch(ferrotape::Keyword)
+pub ferrotape::HeaderError::Keyword
+pub ferrotape::HeaderError::Keyword::keyword: alloc::vec::Vec<u8>
+pub ferrotape::HeaderError::MetadataTooLarge
+pub ferrotape::HeaderError::Mode(u32)
+pub ferrotape::HeaderError::Nul(ferrotape::TextField)
+pub ferrotape::HeaderError::RepeatedKeyword
+pub ferrotape::HeaderError::RepeatedKeyword::keyword: alloc::vec::Vec<u8>
+pub ferrotape::HeaderError::RepeatedXattr
+pub ferrotape::HeaderError::RepeatedXattr::name: alloc::vec::Vec<u8>
+pub ferrotape::HeaderError::ReservedKeyword
+pub ferrotape::HeaderError::ReservedKeyword::keyword: alloc::vec::Vec<u8>
+pub ferrotape::HeaderError::SizeOutOfRange(u64)
+pub ferrotape::HeaderError::TrailingSlash
+pub ferrotape::HeaderError::XattrName
+pub ferrotape::HeaderError::XattrName::name: alloc::vec::Vec<u8>
+impl core::error::Error for ferrotape::HeaderError
+impl core::fmt::Display for ferrotape::HeaderError
+pub fn ferrotape::HeaderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::HeaderError
+impl core::marker::Send for ferrotape::HeaderError
+impl core::marker::Sync for ferrotape::HeaderError
+impl core::marker::Unpin for ferrotape::HeaderError
+impl core::marker::UnsafeUnpin for ferrotape::HeaderError
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::HeaderError
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::HeaderError
+#[non_exhaustive] pub enum ferrotape::HeaderField
+pub ferrotape::HeaderField::DevMajor
+pub ferrotape::HeaderField::DevMinor
+pub ferrotape::HeaderField::Gid
+pub ferrotape::HeaderField::Mode
+pub ferrotape::HeaderField::Mtime
+pub ferrotape::HeaderField::Size
+pub ferrotape::HeaderField::Uid
+impl core::fmt::Display for ferrotape::HeaderField
+pub fn ferrotape::HeaderField::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::HeaderField
+impl core::marker::Send for ferrotape::HeaderField
+impl core::marker::Sync for ferrotape::HeaderField
+impl core::marker::Unpin for ferrotape::HeaderField
+impl core::marker::UnsafeUnpin for ferrotape::HeaderField
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::HeaderField
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::HeaderField
+#[non_exhaustive] pub enum ferrotape::Keyword
+pub ferrotape::Keyword::Atime
+pub ferrotape::Keyword::Ctime
+pub ferrotape::Keyword::Gid
+pub ferrotape::Keyword::Gname
+pub ferrotape::Keyword::Linkpath
+pub ferrotape::Keyword::Mtime
+pub ferrotape::Keyword::Path
+pub ferrotape::Keyword::Size
+pub ferrotape::Keyword::Uid
+pub ferrotape::Keyword::Uname
+impl core::fmt::Display for ferrotape::Keyword
+pub fn ferrotape::Keyword::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Keyword
+impl core::marker::Send for ferrotape::Keyword
+impl core::marker::Sync for ferrotape::Keyword
+impl core::marker::Unpin for ferrotape::Keyword
+impl core::marker::UnsafeUnpin for ferrotape::Keyword
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Keyword
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Keyword
+#[non_exhaustive] pub enum ferrotape::Level
+pub ferrotape::Level::Compatible
+pub ferrotape::Level::Strict
+impl core::marker::Freeze for ferrotape::Level
+impl core::marker::Send for ferrotape::Level
+impl core::marker::Sync for ferrotape::Level
+impl core::marker::Unpin for ferrotape::Level
+impl core::marker::UnsafeUnpin for ferrotape::Level
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Level
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Level
+#[non_exhaustive] pub enum ferrotape::Metadata
+pub ferrotape::Metadata::GlobalHeader
+pub ferrotape::Metadata::LongLink
+pub ferrotape::Metadata::LongName
+pub ferrotape::Metadata::PaxHeader
+impl core::fmt::Display for ferrotape::Metadata
+pub fn ferrotape::Metadata::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Metadata
+impl core::marker::Send for ferrotape::Metadata
+impl core::marker::Sync for ferrotape::Metadata
+impl core::marker::Unpin for ferrotape::Metadata
+impl core::marker::UnsafeUnpin for ferrotape::Metadata
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Metadata
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Metadata
+#[non_exhaustive] pub enum ferrotape::Numeric
+pub ferrotape::Numeric::OutOfRange
+pub ferrotape::Numeric::Unreadable
+impl core::marker::Freeze for ferrotape::Numeric
+impl core::marker::Send for ferrotape::Numeric
+impl core::marker::Sync for ferrotape::Numeric
+impl core::marker::Unpin for ferrotape::Numeric
+impl core::marker::UnsafeUnpin for ferrotape::Numeric
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Numeric
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Numeric
+#[non_exhaustive] pub enum ferrotape::PaxFraming
+pub ferrotape::PaxFraming::BadLength
+pub ferrotape::PaxFraming::KeywordNul
+pub ferrotape::PaxFraming::LengthOutOfBounds
+pub ferrotape::PaxFraming::NoDelimiter
+pub ferrotape::PaxFraming::NoEquals
+pub ferrotape::PaxFraming::NoNewline
+impl core::fmt::Display for ferrotape::PaxFraming
+pub fn ferrotape::PaxFraming::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::PaxFraming
+impl core::marker::Send for ferrotape::PaxFraming
+impl core::marker::Sync for ferrotape::PaxFraming
+impl core::marker::Unpin for ferrotape::PaxFraming
+impl core::marker::UnsafeUnpin for ferrotape::PaxFraming
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::PaxFraming
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::PaxFraming
+#[non_exhaustive] pub enum ferrotape::SparseFlaw
+pub ferrotape::SparseFlaw::Adjacent
+pub ferrotape::SparseFlaw::Count
+pub ferrotape::SparseFlaw::End
+pub ferrotape::SparseFlaw::Extension
+pub ferrotape::SparseFlaw::Global
+pub ferrotape::SparseFlaw::Magic
+pub ferrotape::SparseFlaw::MapLimit
+pub ferrotape::SparseFlaw::Name
+pub ferrotape::SparseFlaw::NoHole
+pub ferrotape::SparseFlaw::NotRegular
+pub ferrotape::SparseFlaw::Number
+pub ferrotape::SparseFlaw::Order
+pub ferrotape::SparseFlaw::PaxForm
+pub ferrotape::SparseFlaw::RealSize
+pub ferrotape::SparseFlaw::Records
+pub ferrotape::SparseFlaw::SizeRecord
+pub ferrotape::SparseFlaw::StoredSize
+impl core::fmt::Display for ferrotape::SparseFlaw
+pub fn ferrotape::SparseFlaw::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::SparseFlaw
+impl core::marker::Send for ferrotape::SparseFlaw
+impl core::marker::Sync for ferrotape::SparseFlaw
+impl core::marker::Unpin for ferrotape::SparseFlaw
+impl core::marker::UnsafeUnpin for ferrotape::SparseFlaw
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::SparseFlaw
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::SparseFlaw
+#[non_exhaustive] pub enum ferrotape::TextField
+pub ferrotape::TextField::Gname
+pub ferrotape::TextField::LinkTarget
+pub ferrotape::TextField::Path
+pub ferrotape::TextField::Uname
+impl core::fmt::Display for ferrotape::TextField
+pub fn ferrotape::TextField::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::TextField
+impl core::marker::Send for ferrotape::TextField
+impl core::marker::Sync for ferrotape::TextField
+impl core::marker::Unpin for ferrotape::TextField
+impl core::marker::UnsafeUnpin for ferrotape::TextField
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::TextField
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::TextField
+#[non_exhaustive] pub enum ferrotape::Truncation
+pub ferrotape::Truncation::Data
+pub ferrotape::Truncation::Header
+pub ferrotape::Truncation::Member
+impl core::fmt::Display for ferrotape::Truncation
+pub fn ferrotape::Truncation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Truncation
+impl core::marker::Send for ferrotape::Truncation
+impl core::marker::Sync for ferrotape::Truncation
+impl core::marker::Unpin for ferrotape::Truncation
+impl core::marker::UnsafeUnpin for ferrotape::Truncation
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Truncation
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Truncation
+#[non_exhaustive] pub enum ferrotape::WriteError
+pub ferrotape::WriteError::Broken
+pub ferrotape::WriteError::Data(core::io::error::Error)
+pub ferrotape::WriteError::Header(ferrotape::HeaderError)
+pub ferrotape::WriteError::Io(core::io::error::Error)
+impl core::convert::From<ferrotape::WriteError> for core::io::error::Error
+pub fn core::io::error::Error::from(ferrotape::WriteError) -> core::io::error::Error
+impl core::error::Error for ferrotape::WriteError
+pub fn ferrotape::WriteError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Display for ferrotape::WriteError
+pub fn ferrotape::WriteError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::WriteError
+impl core::marker::Send for ferrotape::WriteError
+impl core::marker::Sync for ferrotape::WriteError
+impl core::marker::Unpin for ferrotape::WriteError
+impl core::marker::UnsafeUnpin for ferrotape::WriteError
+impl !core::panic::unwind_safe::RefUnwindSafe for ferrotape::WriteError
+impl !core::panic::unwind_safe::UnwindSafe for ferrotape::WriteError
+#[non_exhaustive] pub struct ferrotape::AclRecords<'a>
+impl<'a> ferrotape::AclRecords<'a>
+pub fn ferrotape::AclRecords<'a>::binary(&self) -> core::option::Option<&'a [u8]>
+pub fn ferrotape::AclRecords<'a>::is_empty(&self) -> bool
+pub fn ferrotape::AclRecords<'a>::text(&self) -> core::option::Option<&'a [u8]>
+impl core::fmt::Debug for ferrotape::AclRecords<'_>
+pub fn ferrotape::AclRecords<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Freeze for ferrotape::AclRecords<'a>
+impl<'a> core::marker::Send for ferrotape::AclRecords<'a>
+impl<'a> core::marker::Sync for ferrotape::AclRecords<'a>
+impl<'a> core::marker::Unpin for ferrotape::AclRecords<'a>
+impl<'a> core::marker::UnsafeUnpin for ferrotape::AclRecords<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for ferrotape::AclRecords<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for ferrotape::AclRecords<'a>
+pub struct ferrotape::Data<'a, R>
+impl<R: std::io::Read> std::io::Read for ferrotape::Data<'_, R>
+pub fn ferrotape::Data<'_, R>::read(&mut self, &mut [u8]) -> core::io::error::Result<usize>
+impl<'a, R> core::marker::Freeze for ferrotape::Data<'a, R>
+impl<'a, R> core::marker::Send for ferrotape::Data<'a, R> where R: core::marker::Send
+impl<'a, R> core::marker::Sync for ferrotape::Data<'a, R> where R: core::marker::Sync
+impl<'a, R> core::marker::Unpin for ferrotape::Data<'a, R>
+impl<'a, R> core::marker::UnsafeUnpin for ferrotape::Data<'a, R>
+impl<'a, R> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Data<'a, R> where R: core::panic::unwind_safe::RefUnwindSafe
+impl<'a, R> !core::panic::unwind_safe::UnwindSafe for ferrotape::Data<'a, R>
+#[non_exhaustive] pub struct ferrotape::Entry
+impl ferrotape::Entry
+pub fn ferrotape::Entry::atime(&self) -> core::option::Option<ferrotape::Timestamp>
+pub fn ferrotape::Entry::ctime(&self) -> core::option::Option<ferrotape::Timestamp>
+pub fn ferrotape::Entry::data_offset(&self) -> u64
+pub fn ferrotape::Entry::declared_size(&self) -> u64
+pub fn ferrotape::Entry::device(&self) -> core::option::Option<(u32, u32)>
+pub fn ferrotape::Entry::gid(&self) -> u32
+pub fn ferrotape::Entry::global(&self) -> &ferrotape::PaxRecords
+pub fn ferrotape::Entry::gname(&self) -> &[u8]
+pub fn ferrotape::Entry::header_block(&self) -> &[u8; 512]
+pub fn ferrotape::Entry::header_offset(&self) -> u64
+pub fn ferrotape::Entry::kind(&self) -> ferrotape::EntryKind
+pub fn ferrotape::Entry::link_target(&self) -> &[u8]
+pub fn ferrotape::Entry::mode(&self) -> u32
+pub fn ferrotape::Entry::mtime(&self) -> ferrotape::Timestamp
+pub fn ferrotape::Entry::path(&self) -> &[u8]
+pub fn ferrotape::Entry::pax_records(&self) -> &ferrotape::PaxRecords
+pub fn ferrotape::Entry::size(&self) -> u64
+pub fn ferrotape::Entry::sparse(&self) -> core::option::Option<&ferrotape::Sparse>
+pub fn ferrotape::Entry::typeflag(&self) -> u8
+pub fn ferrotape::Entry::uid(&self) -> u32
+pub fn ferrotape::Entry::uname(&self) -> &[u8]
+impl core::fmt::Debug for ferrotape::Entry
+pub fn ferrotape::Entry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Entry
+impl core::marker::Send for ferrotape::Entry
+impl core::marker::Sync for ferrotape::Entry
+impl core::marker::Unpin for ferrotape::Entry
+impl core::marker::UnsafeUnpin for ferrotape::Entry
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Entry
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Entry
+pub struct ferrotape::Error
+impl ferrotape::Error
+pub fn ferrotape::Error::kind(&self) -> &ferrotape::ErrorKind
+pub fn ferrotape::Error::offset(&self) -> u64
+impl core::convert::From<ferrotape::Error> for core::io::error::Error
+pub fn core::io::error::Error::from(ferrotape::Error) -> core::io::error::Error
+impl core::error::Error for ferrotape::Error
+pub fn ferrotape::Error::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Display for ferrotape::Error
+pub fn ferrotape::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Error
+impl core::marker::Send for ferrotape::Error
+impl core::marker::Sync for ferrotape::Error
+impl core::marker::Unpin for ferrotape::Error
+impl core::marker::UnsafeUnpin for ferrotape::Error
+impl !core::panic::unwind_safe::RefUnwindSafe for ferrotape::Error
+impl !core::panic::unwind_safe::UnwindSafe for ferrotape::Error
+pub struct ferrotape::Header
+impl ferrotape::Header
+pub fn ferrotape::Header::add_record(&mut self, impl core::convert::Into<alloc::vec::Vec<u8>>, impl core::convert::Into<alloc::vec::Vec<u8>>) -> &mut ferrotape::Header
+pub fn ferrotape::Header::add_xattr(&mut self, impl core::convert::Into<alloc::vec::Vec<u8>>, impl core::convert::Into<alloc::vec::Vec<u8>>) -> &mut ferrotape::Header
+pub fn ferrotape::Header::block_device(impl core::convert::Into<alloc::vec::Vec<u8>>, u32, u32) -> ferrotape::Header
+pub fn ferrotape::Header::char_device(impl core::convert::Into<alloc::vec::Vec<u8>>, u32, u32) -> ferrotape::Header
+pub fn ferrotape::Header::directory(impl core::convert::Into<alloc::vec::Vec<u8>>) -> ferrotape::Header
+pub fn ferrotape::Header::encode(&self) -> core::result::Result<alloc::vec::Vec<u8>, ferrotape::HeaderError>
+pub fn ferrotape::Header::fifo(impl core::convert::Into<alloc::vec::Vec<u8>>) -> ferrotape::Header
+pub fn ferrotape::Header::file(impl core::convert::Into<alloc::vec::Vec<u8>>, u64) -> ferrotape::Header
+pub fn ferrotape::Header::hard_link(impl core::convert::Into<alloc::vec::Vec<u8>>, impl core::convert::Into<alloc::vec::Vec<u8>>) -> ferrotape::Header
+pub fn ferrotape::Header::set_atime(&mut self, ferrotape::Timestamp) -> &mut ferrotape::Header
+pub fn ferrotape::Header::set_ctime(&mut self, ferrotape::Timestamp) -> &mut ferrotape::Header
+pub fn ferrotape::Header::set_mode(&mut self, u32) -> &mut ferrotape::Header
+pub fn ferrotape::Header::set_mtime(&mut self, ferrotape::Timestamp) -> &mut ferrotape::Header
+pub fn ferrotape::Header::set_owner(&mut self, u32, u32) -> &mut ferrotape::Header
+pub fn ferrotape::Header::set_owner_names(&mut self, impl core::convert::Into<alloc::vec::Vec<u8>>, impl core::convert::Into<alloc::vec::Vec<u8>>) -> &mut ferrotape::Header
+pub fn ferrotape::Header::symlink(impl core::convert::Into<alloc::vec::Vec<u8>>, impl core::convert::Into<alloc::vec::Vec<u8>>) -> ferrotape::Header
+impl core::fmt::Debug for ferrotape::Header
+pub fn ferrotape::Header::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for ferrotape::Header
+impl core::marker::Send for ferrotape::Header
+impl core::marker::Sync for ferrotape::Header
+impl core::marker::Unpin for ferrotape::Header
+impl core::marker::UnsafeUnpin for ferrotape::Header
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Header
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Header
+#[non_exhaustive] pub struct ferrotape::Limits
+pub ferrotape::Limits::metadata: u64
+impl core::default::Default for ferrotape::Limits
+pub fn ferrotape::Limits::default() -> ferrotape::Limits
+impl core::marker::Freeze for ferrotape::Limits
+impl core::marker::Send for ferrotape::Limits
+impl core::marker::Sync for ferrotape::Limits
+impl core::marker::Unpin for ferrotape::Limits
+impl core::marker::UnsafeUnpin for ferrotape::Limits
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Limits
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Limits
+pub struct ferrotape::PaxRecords
+impl ferrotape::PaxRecords
+pub fn ferrotape::PaxRecords::access_acl(&self) -> ferrotape::AclRecords<'_>
+pub fn ferrotape::PaxRecords::default_acl(&self) -> ferrotape::AclRecords<'_>
+pub fn ferrotape::PaxRecords::get(&self, &[u8]) -> core::option::Option<&[u8]>
+pub fn ferrotape::PaxRecords::is_empty(&self) -> bool
+pub fn ferrotape::PaxRecords::iter(&self) -> ferrotape::Records<'_>
+pub fn ferrotape::PaxRecords::xattr(&self, &[u8]) -> core::option::Option<&[u8]>
+pub fn ferrotape::PaxRecords::xattrs(&self) -> ferrotape::Xattrs<'_>
+impl core::fmt::Debug for ferrotape::PaxRecords
+pub fn ferrotape::PaxRecords::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::iter::traits::collect::IntoIterator for &'a ferrotape::PaxRecords
+pub type &'a ferrotape::PaxRecords::IntoIter = ferrotape::Records<'a>
+pub type &'a ferrotape::PaxRecords::Item = (&'a [u8], &'a [u8])
+pub fn &'a ferrotape::PaxRecords::into_iter(self) -> ferrotape::Records<'a>
+impl core::marker::Freeze for ferrotape::PaxRecords
+impl core::marker::Send for ferrotape::PaxRecords
+impl core::marker::Sync for ferrotape::PaxRecords
+impl core::marker::Unpin for ferrotape::PaxRecords
+impl core::marker::UnsafeUnpin for ferrotape::PaxRecords
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::PaxRecords
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::PaxRecords
+pub struct ferrotape::Reader<R>
+impl<R: std::io::Read + core::io::seek::Seek> ferrotape::Reader<R>
+pub fn ferrotape::Reader<R>::seeking(R) -> ferrotape::Reader<R>
+impl<R: std::io::Read> ferrotape::Reader<R>
+pub fn ferrotape::Reader<R>::data(&mut self) -> ferrotape::Data<'_, R>
+pub fn ferrotape::Reader<R>::finish(&mut self, u64) -> core::result::Result<(), ferrotape::Error>
+pub fn ferrotape::Reader<R>::new(R) -> ferrotape::Reader<R>
+pub fn ferrotape::Reader<R>::next_entry(&mut self) -> core::result::Result<core::option::Option<ferrotape::Entry>, ferrotape::Error>
+pub fn ferrotape::Reader<R>::read_entry(&mut self, u64) -> core::result::Result<alloc::vec::Vec<u8>, ferrotape::Error>
+pub fn ferrotape::Reader<R>::stored_data(&mut self) -> ferrotape::Data<'_, R>
+pub fn ferrotape::Reader<R>::trailing_global(&self) -> &ferrotape::PaxRecords
+pub fn ferrotape::Reader<R>::with_global_headers(self, ferrotape::GlobalHeaders) -> ferrotape::Reader<R>
+pub fn ferrotape::Reader<R>::with_level(self, ferrotape::Level) -> ferrotape::Reader<R>
+pub fn ferrotape::Reader<R>::with_limits(self, ferrotape::Limits) -> ferrotape::Reader<R>
+impl<R> core::marker::Freeze for ferrotape::Reader<R> where R: core::marker::Freeze
+impl<R> core::marker::Send for ferrotape::Reader<R> where R: core::marker::Send
+impl<R> core::marker::Sync for ferrotape::Reader<R> where R: core::marker::Sync
+impl<R> core::marker::Unpin for ferrotape::Reader<R> where R: core::marker::Unpin
+impl<R> core::marker::UnsafeUnpin for ferrotape::Reader<R> where R: core::marker::UnsafeUnpin
+impl<R> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Reader<R> where R: core::panic::unwind_safe::RefUnwindSafe
+impl<R> core::panic::unwind_safe::UnwindSafe for ferrotape::Reader<R> where R: core::panic::unwind_safe::UnwindSafe
+pub struct ferrotape::Records<'a>
+impl core::iter::traits::marker::FusedIterator for ferrotape::Records<'_>
+impl<'a> core::iter::traits::iterator::Iterator for ferrotape::Records<'a>
+pub type ferrotape::Records<'a>::Item = (&'a [u8], &'a [u8])
+pub fn ferrotape::Records<'a>::next(&mut self) -> core::option::Option<Self::Item>
+impl<'a> core::marker::Freeze for ferrotape::Records<'a>
+impl<'a> core::marker::Send for ferrotape::Records<'a>
+impl<'a> core::marker::Sync for ferrotape::Records<'a>
+impl<'a> core::marker::Unpin for ferrotape::Records<'a>
+impl<'a> core::marker::UnsafeUnpin for ferrotape::Records<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Records<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for ferrotape::Records<'a>
+#[non_exhaustive] pub struct ferrotape::Region
+impl ferrotape::Region
+pub fn ferrotape::Region::end(&self) -> u64
+pub fn ferrotape::Region::length(&self) -> u64
+pub fn ferrotape::Region::offset(&self) -> u64
+impl core::marker::Freeze for ferrotape::Region
+impl core::marker::Send for ferrotape::Region
+impl core::marker::Sync for ferrotape::Region
+impl core::marker::Unpin for ferrotape::Region
+impl core::marker::UnsafeUnpin for ferrotape::Region
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Region
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Region
+#[non_exhaustive] pub struct ferrotape::Sparse
+impl ferrotape::Sparse
+pub fn ferrotape::Sparse::real_size(&self) -> u64
+pub fn ferrotape::Sparse::regions(&self) -> &[ferrotape::Region]
+pub fn ferrotape::Sparse::stored_size(&self) -> u64
+impl core::marker::Freeze for ferrotape::Sparse
+impl core::marker::Send for ferrotape::Sparse
+impl core::marker::Sync for ferrotape::Sparse
+impl core::marker::Unpin for ferrotape::Sparse
+impl core::marker::UnsafeUnpin for ferrotape::Sparse
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Sparse
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Sparse
+pub struct ferrotape::Timestamp
+impl ferrotape::Timestamp
+pub fn ferrotape::Timestamp::from_secs(i64) -> ferrotape::Timestamp
+pub fn ferrotape::Timestamp::nanos(&self) -> u32
+pub fn ferrotape::Timestamp::new(i64, u32) -> core::option::Option<ferrotape::Timestamp>
+pub fn ferrotape::Timestamp::secs(&self) -> i64
+impl core::marker::Freeze for ferrotape::Timestamp
+impl core::marker::Send for ferrotape::Timestamp
+impl core::marker::Sync for ferrotape::Timestamp
+impl core::marker::Unpin for ferrotape::Timestamp
+impl core::marker::UnsafeUnpin for ferrotape::Timestamp
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Timestamp
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Timestamp
+pub struct ferrotape::Writer<W: std::io::Write>
+impl<W: std::io::Write> ferrotape::Writer<W>
+pub fn ferrotape::Writer<W>::append(&mut self, &ferrotape::Header, impl std::io::Read) -> core::result::Result<(), ferrotape::WriteError>
+pub fn ferrotape::Writer<W>::finish(self) -> core::result::Result<W, ferrotape::WriteError>
+pub fn ferrotape::Writer<W>::get_ref(&self) -> &W
+pub fn ferrotape::Writer<W>::into_inner(self) -> core::result::Result<W, ferrotape::WriteError>
+pub fn ferrotape::Writer<W>::new(W) -> ferrotape::Writer<W>
+impl<W: std::io::Write> core::fmt::Debug for ferrotape::Writer<W>
+pub fn ferrotape::Writer<W>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<W> core::marker::Freeze for ferrotape::Writer<W> where W: core::marker::Freeze
+impl<W> core::marker::Send for ferrotape::Writer<W> where W: core::marker::Send
+impl<W> core::marker::Sync for ferrotape::Writer<W> where W: core::marker::Sync
+impl<W> core::marker::Unpin for ferrotape::Writer<W> where W: core::marker::Unpin
+impl<W> core::marker::UnsafeUnpin for ferrotape::Writer<W> where W: core::marker::UnsafeUnpin
+impl<W> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Writer<W> where W: core::panic::unwind_safe::RefUnwindSafe
+impl<W> core::panic::unwind_safe::UnwindSafe for ferrotape::Writer<W> where W: core::panic::unwind_safe::UnwindSafe
+pub struct ferrotape::Xattrs<'a>
+impl core::iter::traits::marker::FusedIterator for ferrotape::Xattrs<'_>
+impl<'a> core::iter::traits::iterator::Iterator for ferrotape::Xattrs<'a>
+pub type ferrotape::Xattrs<'a>::Item = (&'a [u8], &'a [u8])
+pub fn ferrotape::Xattrs<'a>::next(&mut self) -> core::option::Option<Self::Item>
+impl<'a> core::marker::Freeze for ferrotape::Xattrs<'a>
+impl<'a> core::marker::Send for ferrotape::Xattrs<'a>
+impl<'a> core::marker::Sync for ferrotape::Xattrs<'a>
+impl<'a> core::marker::Unpin for ferrotape::Xattrs<'a>
+impl<'a> core::marker::UnsafeUnpin for ferrotape::Xattrs<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Xattrs<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for ferrotape::Xattrs<'a>

@@ -1,0 +1,33 @@
+[statement]
+Two GNU long names before one member. GNU tar, bsdtar and Go name the member
+from the second, bsdtar reporting an error, and Python from the first.
+ferrotape refuses a second pax header, long name or long link before a
+member.
+
+[archive]
+longname first-long
+longname second-long
+header name=short
+data "hello\n"
+end
+
+[verdict]
+all: refused RepeatedMetadata at 1024
+
+[gnu-tar 1.35]
+member listed=- path=second-long size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=second-long size=6 mode=0o644
+warning "bsdtar: Damaged archive: Redundant 'L' headers may cause filenames to be incorrect"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=first-long size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=second-long size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

@@ -1,0 +1,26 @@
+[statement]
+A pax `linkpath` holding a NUL, read as a `path` holding one is (see
+`a-nul-in-a-path`). ferrotape refuses it.
+
+[archive]
+pax linkpath="tgt\0rest"
+header name=lnk typeflag=2 linkname=x
+end
+
+[verdict]
+all: refused PaxNul at 0
+
+[gnu-tar 1.35]
+member listed=l path=lnk link=tgt size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=l path=lnk link=tgt size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=2 path=lnk link="tgt\0rest" size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

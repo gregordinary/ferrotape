@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Started by hand against a chosen ref. A push event is delivered once and is
+  # not redelivered, so a commit whose delivery was dropped otherwise has no way
+  # to be checked short of pushing another commit to trigger one.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format, lint, test, docs, other platforms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust (pinned)
+        # rust-toolchain.toml pins the toolchain, its components, and the
+        # WebAssembly and Windows targets, so fmt, clippy, and the builds all
+        # run under the same rustfmt everywhere.
+        run: rustup show
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        # The panic-freedom lints in src/lib.rs are denied outright; -D warnings
+        # adds everything else clippy warns about.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --workspace --all-features
+      - name: Documentation (warning-clean)
+        # -D warnings makes a broken intra-doc link an error.
+        run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Build for WebAssembly
+        # A target with a standard library but no operating system beneath it.
+        # A stray use of a Unix-only interface fails to build here, where on
+        # Linux it would compile.
+        run: cargo build --lib --target wasm32-unknown-unknown
+      - name: Build for Windows
+        # A library build links nothing, so the Windows target builds from
+        # Linux, with the same effect for a Unix-only interface.
+        run: cargo build --lib --target x86_64-pc-windows-msvc
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust (MSRV)
+        # The `+1.91` override wins over the pinned toolchain, which sits ahead
+        # of the floor, so this checks the version `rust-version` promises
+        # rather than the one contributors use.
+        run: rustup toolchain install 1.91 --profile minimal
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Test
+        # The tests run here as well as on the pinned toolchain, so the floor
+        # is held to the library's behavior and not only to its compiling.
+        # Warnings are errors here too. Some arise only at the floor: an
+        # `expect` that a later compiler fulfills can go unfulfilled.
+        run: cargo +1.91 test --workspace --all-features
+        env:
+          RUSTFLAGS: -D warnings
+
+  deny:
+    name: License and advisory policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check dependency licenses and advisories
+        # deny.toml pins the permitted licenses, the advisory policy, and the
+        # registries a dependency may come from, dev-dependencies included.
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check licenses advisories sources
+      - name: Check the fuzzing harness's dependencies
+        # The harness is a workspace of its own, and holds the only
+        # third-party crates; the same deny.toml applies.
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: fuzz/Cargo.toml
+          command: check licenses advisories sources
+
+  fuzz:
+    name: Fuzz targets
+    runs-on: ubuntu-latest
+    env:
+      # cargo-fuzz needs a nightly compiler for its sanitizer flags. Pinned, so
+      # this job fails on a change to the targets rather than on a nightly's
+      # regression, and bumped deliberately.
+      FUZZ_NIGHTLY: nightly-2026-07-09
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust (pinned nightly) and cargo-fuzz
+        run: |
+          rustup toolchain install "$FUZZ_NIGHTLY" --profile minimal
+          cargo install cargo-fuzz --version 0.13.2 --locked
+      - name: Build every target
+        # What this catches is a target left behind by a change to the API it
+        # drives.
+        working-directory: fuzz
+        run: cargo "+$FUZZ_NIGHTLY" fuzz build
+      - name: Smoke run
+        # Each target from an empty corpus, for a fixed number of runs from a
+        # fixed seed, so a failure here reproduces with the same command. It
+        # catches a property a change breaks on inputs found in seconds;
+        # longer runs are made by hand (CONTRIBUTING.md).
+        working-directory: fuzz
+        run: |
+          for target in $(cargo "+$FUZZ_NIGHTLY" fuzz list); do
+            cargo "+$FUZZ_NIGHTLY" fuzz run "$target" -- -runs=300000 -seed=1 -max_len=16384
+          done
+
+  api:
+    name: Public API surface
+    runs-on: ubuntu-latest
+    env:
+      # cargo-public-api reads rustdoc's JSON output, whose rendering of paths
+      # changes between nightlies, so a floating nightly would fail this job on
+      # rustdoc drift rather than on an API change. Pinned, and bumped
+      # deliberately: a bump regenerates the snapshot, and that diff is
+      # reviewed like any other.
+      RUSTDOC_JSON_NIGHTLY: nightly-2026-07-09
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust (pinned, plus the pinned nightly for rustdoc JSON)
+        run: |
+          rustup show
+          rustup toolchain install "$RUSTDOC_JSON_NIGHTLY" --profile minimal
+      - name: Install cargo-public-api
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-public-api@0.52.0
+      - name: Regenerate the snapshot
+        # Auto-trait impls are kept, so a type that gains or loses Send or Sync
+        # shows up in review. Blanket and auto-derived impls are omitted as
+        # noise.
+        run: |
+          RUSTUP_TOOLCHAIN="$RUSTDOC_JSON_NIGHTLY" cargo public-api -p ferrotape --all-features \
+            --omit blanket-impls,auto-derived-impls > public-api.txt
+      - name: Fail on an unreviewed surface change
+        # The snapshot is committed, so any change to the public API arrives as
+        # a reviewable diff rather than passing unnoticed. Regenerate it with
+        # the command above and commit the result.
+        run: git diff --exit-code -- public-api.txt
+
+  readers:
+    name: Case readings from the pinned readers
+    # Ubuntu 24.04 by name, not ubuntu-latest: the catalog's GNU tar and
+    # Python are the ones it packages.
+    runs-on: ubuntu-24.04
+    env:
+      LIBARCHIVE_VERSION: 3.8.11
+      LIBARCHIVE_SHA256: a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2
+      GO_VERSION: 1.27.0
+      GO_SHA256: 675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned)
+        run: rustup show
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install libacl's headers
+        # bsdtar is built with ACL support, as libarchive builds it where
+        # libacl is present.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libacl1-dev
+      - name: Build bsdtar (pinned)
+        run: harness/readers.sh install libarchive "$LIBARCHIVE_VERSION" "$LIBARCHIVE_SHA256" "$RUNNER_TEMP/libarchive"
+      - name: Install Go (pinned)
+        run: harness/readers.sh install go "$GO_VERSION" "$GO_SHA256" "$RUNNER_TEMP/go"
+      - name: Name the readers' builds
+        # GNU tar and Python are Ubuntu's packages, whose security updates
+        # can change what they read without changing the version they report.
+        # A reading such an update changes fails the next step; the packages'
+        # versions are shown so that the failure can be traced to one.
+        run: |
+          {
+            echo "## Readers"
+            echo
+            echo "- GNU tar: Ubuntu's tar $(dpkg-query --show --showformat '${Version}' tar)"
+            echo "- bsdtar: $("$RUNNER_TEMP/libarchive/bin/bsdtar" --version)"
+            echo "- Python: Ubuntu's libpython3.12-stdlib $(dpkg-query --show --showformat '${Version}' libpython3.12-stdlib)"
+            echo "- Go: $("$RUNNER_TEMP/go/go/bin/go" version)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check every case's readings
+        # Each reader is held to the version the catalog pins, and each
+        # reading to the one recorded, so a case's readings are the readers'
+        # own and not written by hand.
+        env:
+          FERROTAPE_GNU_TAR: /usr/bin/tar
+          FERROTAPE_PYTHON: /usr/bin/python3
+          FERROTAPE_BSDTAR: ${{ runner.temp }}/libarchive/bin/bsdtar
+          FERROTAPE_GO: ${{ runner.temp }}/go/go/bin/go
+        run: cargo run --release -p ferrotape-harness -- check catalog
+      - name: Read mutants of every case
+        # Each case's archive changed one to three ways, read by ferrotape in
+        # every setting and, where it reads one, by the readers that setting
+        # stands in for. A mutant ferrotape reads otherwise than they do fails
+        # the job. The run is the same set of mutants each time, so a failure
+        # is a change in ferrotape or a reader, not chance.
+        env:
+          FERROTAPE_GNU_TAR: /usr/bin/tar
+          FERROTAPE_PYTHON: /usr/bin/python3
+          FERROTAPE_BSDTAR: ${{ runner.temp }}/libarchive/bin/bsdtar
+          FERROTAPE_GO: ${{ runner.temp }}/go/go/bin/go
+        run: cargo run --release -p ferrotape-harness -- mutate --seed 1 --count 10000 --jobs 4 --out mutants catalog
+      - name: Keep the mutants read otherwise
+        # The first three of each kind, as cases with their readings, to be
+        # reduced and added to the catalog with the rule they show.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutants
+          path: mutants
+          if-no-files-found: ignore

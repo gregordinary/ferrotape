@@ -1,0 +1,31 @@
+[statement]
+A pax `atime` record with an empty value. GNU tar reports a malformed time.
+ferrotape applies `atime`, and refuses an empty value of a keyword it
+applies.
+
+[archive]
+pax atime=""
+header name=a
+data "hello\n"
+end
+
+[verdict]
+all: refused PaxValue at 0
+
+[gnu-tar 1.35]
+member listed=- path=a size=6 mode=0o644 data="hello\n"
+warning "tar: Malformed extended header: invalid atime="
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=a size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=a size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

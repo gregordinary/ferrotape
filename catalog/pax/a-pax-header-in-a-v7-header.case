@@ -1,0 +1,32 @@
+[statement]
+A v7 header (no magic) with typeflag `x`. The reference readers apply it as a
+pax header, and some Rust readers read it as a regular file, so the readers
+disagree on the members. In Strict, ferrotape refuses it; in Compatible, it
+applies it, as the reference readers do.
+
+[archive]
+header name=v7x typeflag=x magic=v7
+records path=evilname
+header name=victim
+data "hello\n"
+end
+
+[verdict]
+strict: refused MetadataWithoutMagic at 0
+compatible: read
+
+[gnu-tar 1.35]
+member listed=- path=evilname size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=evilname size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=evilname size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=evilname size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

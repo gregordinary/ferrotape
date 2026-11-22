@@ -1,0 +1,31 @@
+[statement]
+A global header whose record's length is wrong is malformed in every mode,
+since every mode frames a global header's records.
+
+[archive]
+header name=GlobalHead typeflag=g
+data "5 a=b\n"
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: refused PaxFraming at 0
+
+[gnu-tar 1.35]
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+warning "tar: Malformed extended header: missing newline"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=after size=6 mode=0o644
+warning "bsdtar: Malformed pax attributes"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

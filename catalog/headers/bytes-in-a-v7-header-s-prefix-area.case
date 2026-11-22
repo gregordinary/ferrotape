@@ -1,0 +1,28 @@
+[statement]
+A v7 header has no prefix, but Python joins the bytes at offset 345 to the
+name wherever the first of them is not NUL, as it does in a GNU header (see
+`bytes-in-a-gnu-header-s-prefix-area`). ferrotape refuses it.
+
+[archive]
+header name=v7name magic=v7 @345=pre
+data "v\n"
+end
+
+[verdict]
+all: refused PrefixArea at 0
+
+[gnu-tar 1.35]
+member listed=- path=v7name size=2 mode=0o644 data="v\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=v7name size=2 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=pre/v7name size=2 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v\n"
+ok
+
+[go 1.27.0]
+member type=0 path=v7name size=2 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v\n"
+ok

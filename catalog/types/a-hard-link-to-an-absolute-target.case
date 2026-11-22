@@ -1,0 +1,34 @@
+[statement]
+A hard link whose target is absolute. GNU tar lists the target without its
+leading slash, as it extracts it, and says so; the others list it as
+stored, and so does ferrotape. Which names to extract is the caller's choice.
+
+[archive]
+header name=a
+data "x"
+header name=h typeflag=1 linkname=/a
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=a size=1 mode=0o644 data="x"
+member listed=h path=h link=a size=0 mode=0o644
+warning "tar: Removing leading `/' from hard link targets"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=a size=1 mode=0o644
+member listed=h path=h link=/a size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=1 path=h link=/a size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=0 path=a size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=1 path=h link=/a size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

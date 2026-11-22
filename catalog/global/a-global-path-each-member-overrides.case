@@ -1,0 +1,41 @@
+[statement]
+A global header carrying `uid` and `path`, then members whose own pax headers
+name them. In Apply, the member's own record wins over the global one and the
+global `uid` applies, as GNU tar and Python read it; in Defer, neither global
+record applies, as bsdtar and Go read it.
+
+[archive]
+global uid=1234 path=common
+pax path=one
+header name=a
+data "hello\n"
+pax path=two
+header name=b
+data "hello\n"
+end
+
+[verdict]
+refuse: refused GlobalRecord at 0
+apply: read
+defer: read
+
+[gnu-tar 1.35]
+member listed=- path=one size=6 mode=0o644 data="hello\n"
+member listed=- path=two size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Unsupported pax global extended header attribute 'uid'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=one size=6 mode=0o644 mtime=0 uid=1234 gid=0 uname=root gname=root data="hello\n"
+member type=0 path=two size=6 mode=0o644 mtime=0 uid=1234 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=g path=common size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=one size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=0 path=two size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

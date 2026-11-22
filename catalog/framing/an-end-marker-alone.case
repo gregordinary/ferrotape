@@ -1,0 +1,21 @@
+[statement]
+An end marker alone is an archive with no members, read alike by every
+reader.
+
+[archive]
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+exit 0
+
+[bsdtar 3.8.11]
+exit 0
+
+[python 3.12.3]
+ok
+
+[go 1.27.0]
+ok

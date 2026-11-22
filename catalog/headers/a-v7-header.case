@@ -1,0 +1,28 @@
+[statement]
+A header with no magic is a pre-POSIX v7 header. Every reader reads it as a
+ustar header without the fields past offset 257: the owner's and group's
+names, the device numbers and the prefix.
+
+[archive]
+header name=v7file magic=v7
+data "v7\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=v7file size=3 mode=0o644 data="v7\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=v7file size=3 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=v7file size=3 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v7\n"
+ok
+
+[go 1.27.0]
+member type=0 path=v7file size=3 mode=0o644 mtime=0 uid=0 gid=0 uname="" gname="" data="v7\n"
+ok

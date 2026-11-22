@@ -1,0 +1,29 @@
+[statement]
+A character device whose major number does not parse is malformed, and
+ferrotape refuses the archive at its header.
+
+[archive]
+header name=chr typeflag=3 devmajor="zzzzzzz\0"
+header name=after
+data "hello\n"
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+member listed=c path=chr device=4294967295,0 mode=0o644
+member listed=- path=after size=6 mode=0o644 data="hello\n"
+warning "tar: Archive contains 'zzzzzzz' where numeric major_t value expected"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: invalid header"
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

@@ -1,0 +1,44 @@
+[statement]
+An archive every reader reads alike: a directory, a regular file in it, and
+a symbolic link and a hard link to the file. Every reference reader lists the
+four members with the same names, link targets and data, and ferrotape reads
+them in every setting.
+
+[archive]
+header name=d/ typeflag=5 mode=0o755
+header name=d/f
+data "hello\n"
+header name=d/l typeflag=2 linkname=f
+header name=d/h typeflag=1 linkname=d/f
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=d path=d/ size=0 mode=0o755
+member listed=- path=d/f size=6 mode=0o644 data="hello\n"
+member listed=l path=d/l link=f size=0 mode=0o644
+member listed=h path=d/h link=d/f size=0 mode=0o644
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=d/ size=0 mode=0o755
+member listed=- path=d/f size=6 mode=0o644
+member listed=l path=d/l link=f size=0 mode=0o644
+member listed=h path=d/h link=d/f size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=5 path=d size=0 mode=0o755 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=0 path=d/f size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=2 path=d/l link=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+member type=1 path=d/h link=d/f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=5 path=d/ size=0 mode=0o755 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=d/f size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+member type=2 path=d/l link=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=1 path=d/h link=d/f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
