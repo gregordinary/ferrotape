@@ -189,6 +189,117 @@
 //! rather than reading it. [`Entry::data_offset`] says where each member's
 //! data lies.
 //!
+//! # Without I/O
+//!
+//! A [`Reader`] is a [`Decoder`] driven over a [`Read`](std::io::Read). The
+//! decoder performs no I/O: it says what it needs next, the stream's next
+//! bytes or bytes to pass over, and its caller moves them. A source that a
+//! `Read` does not fit is read by driving a decoder directly. Such a source is
+//! an asynchronous stream, a buffer an interrupt fills, or an archive in
+//! memory. The decoder counts every byte, and itself
+//! frames each member's data and the padding after it. A driver never
+//! computes a size or an offset, and every rule and limit applies as it does
+//! in a reader.
+//!
+//! Here a decoder is driven over a source whose reads complete later, a
+//! socket or a pipe in an asynchronous runtime:
+//!
+//! ```
+//! use std::error::Error;
+//!
+//! use ferrotape::{Chunk, Decoder, Entry, Step};
+//!
+//! /// A source whose reads complete later.
+//! trait Source {
+//!     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
+//! }
+//!
+//! /// The next member, whatever of the last one's data was not read passed
+//! /// over, or `None` at the end of the archive.
+//! async fn next_entry(
+//!     decoder: &mut Decoder,
+//!     source: &mut impl Source,
+//! ) -> Result<Option<Entry>, Box<dyn Error>> {
+//!     let mut scratch = [0; 4096];
+//!     loop {
+//!         match decoder.step()? {
+//!             Step::Read(buf) => {
+//!                 let got = source.read(buf).await?;
+//!                 decoder.filled(got);
+//!             }
+//!             Step::Skip(count) => {
+//!                 let want =
+//!                     usize::try_from(count).map_or(scratch.len(), |c| c.min(scratch.len()));
+//!                 let got = source.read(&mut scratch[..want]).await?;
+//!                 decoder.skipped(got as u64);
+//!             }
+//!             Step::Entry(entry) => return Ok(Some(entry)),
+//!             Step::End => return Ok(None),
+//!         }
+//!     }
+//! }
+//!
+//! /// Reads the current member's data into `out`.
+//! async fn read_data(
+//!     decoder: &mut Decoder,
+//!     source: &mut impl Source,
+//!     out: &mut Vec<u8>,
+//! ) -> Result<(), Box<dyn Error>> {
+//!     let mut buf = [0; 8192];
+//!     loop {
+//!         match decoder.data()? {
+//!             Chunk::Read(count) => {
+//!                 let want = usize::try_from(count).map_or(buf.len(), |c| c.min(buf.len()));
+//!                 let got = source.read(&mut buf[..want]).await?;
+//!                 out.extend_from_slice(&buf[..got]);
+//!                 decoder.data_read(got as u64);
+//!             }
+//!             Chunk::Zeros(count) => {
+//!                 let count = usize::try_from(count).map_or(buf.len(), |c| c.min(buf.len()));
+//!                 out.resize(out.len() + count, 0);
+//!                 decoder.data_read(count as u64);
+//!             }
+//!             Chunk::End => return Ok(()),
+//!         }
+//!     }
+//! }
+//! # struct Slice<'a>(&'a [u8]);
+//! # impl Source for Slice<'_> {
+//! #     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+//! #         std::io::Read::read(&mut self.0, buf)
+//! #     }
+//! # }
+//! # fn block_on<F: std::future::Future>(future: F) -> F::Output {
+//! #     let mut future = std::pin::pin!(future);
+//! #     let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+//! #     loop {
+//! #         if let std::task::Poll::Ready(out) = future.as_mut().poll(&mut context) {
+//! #             return out;
+//! #         }
+//! #     }
+//! # }
+//! # use ferrotape::{Header, Writer};
+//! # let mut writer = Writer::new(Vec::new());
+//! # writer.append(&Header::file("a.txt", 2), &b"hi"[..])?;
+//! # writer.append(&Header::file("b.txt", 3), &b"bye"[..])?;
+//! # let archive = writer.finish()?;
+//! # block_on(async {
+//! #     let mut decoder = Decoder::new();
+//! #     let mut source = Slice(&archive);
+//! #     let a = next_entry(&mut decoder, &mut source).await?.expect("a.txt");
+//! #     assert_eq!(a.path(), b"a.txt");
+//! #     let b = next_entry(&mut decoder, &mut source).await?.expect("b.txt");
+//! #     let mut data = Vec::new();
+//! #     read_data(&mut decoder, &mut source, &mut data).await?;
+//! #     assert_eq!((b.path(), &data[..]), (&b"b.txt"[..], &b"bye"[..]));
+//! #     assert!(next_entry(&mut decoder, &mut source).await?.is_none());
+//! #     Ok::<(), Box<dyn Error>>(())
+//! # })?;
+//! # Ok::<(), Box<dyn Error>>(())
+//! ```
+//!
+//! [`Decoder`]'s documentation reads an archive in memory.
+//!
 //! # Writing
 //!
 //! A [`Header`] describes a member to write: one constructor for each kind of
@@ -262,6 +373,7 @@
 
 extern crate alloc;
 
+mod decoder;
 pub mod differences;
 mod encode;
 mod entry;
@@ -275,6 +387,7 @@ mod settings;
 mod sparse;
 mod writer;
 
+pub use decoder::{Chunk, Decoder, Step};
 pub use encode::{Header, HeaderError, TextField};
 pub use entry::{Entry, EntryKind, Timestamp};
 pub use error::{

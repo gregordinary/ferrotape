@@ -185,12 +185,6 @@ impl Parser {
         self.level
     }
 
-    /// Whether the archive has ended, so that nothing more is to be read of
-    /// it.
-    pub(crate) fn ended(&self) -> bool {
-        self.state == State::Ended
-    }
-
     pub(crate) fn trailing_global(&self) -> &PaxRecords {
         &self.trailing_global
     }

@@ -3,11 +3,13 @@
 //! to change it.
 //!
 //! The input is read as an archive at each level in each global-header mode,
-//! four ways: from a `Read`, and by seeking, each once reading every member's
-//! data and once skipping it. Checked:
+//! five ways: from a `Read`, and by seeking, each once reading every member's
+//! data and once skipping it; and by a `Decoder` handed the input in pieces
+//! whose sizes the input chooses. Checked:
 //!
-//! - the four ways list the same members, data aside, and end alike, a
-//!   refusal with the same kind at the same offset;
+//! - the five ways list the same members, data aside, and end alike, a
+//!   refusal with the same kind at the same offset; the decoder lists the
+//!   same data as the reader;
 //! - a refusal is final: the next call fails with the same kind and offset;
 //! - each member's data is its size, from its data offset, within the input,
 //!   and each member's header follows the last one's; a sparse member's
@@ -23,7 +25,7 @@
 
 use std::io::{Cursor, Read};
 
-use ferrotape::{Entry, Error, ErrorKind, GlobalHeaders, Level, Reader};
+use ferrotape::{Chunk, Decoder, Entry, Error, ErrorKind, GlobalHeaders, Level, Reader, Step};
 use libfuzzer_sys::fuzz_target;
 
 /// The most `finish` reads after the archive: more than any input holds.
@@ -160,6 +162,109 @@ fn list<R: Read>(mut reader: Reader<R>, read_data: bool, input: u64) -> Listing 
     Listing { members, end }
 }
 
+/// The sizes a decoder's driver hands it the input in, cycling: chosen by
+/// the input, from a byte at a time to more than a block.
+fn split(input: &[u8]) -> [usize; 4] {
+    let seed = input.iter().fold(0x811c_9dc5_u32, |h, byte| {
+        (h ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
+    });
+    let at = |shift: u32, most: u32| ((seed >> shift) % most) as usize + 1;
+    [at(0, 13), at(8, 1031), 512, at(16, 4099)]
+}
+
+/// Every member `decoder` yields over `input`, handed the input in pieces of
+/// `sizes`, each member's data read as [`list`] reads it, then `finish`.
+fn decode(input: &[u8], decoder: Decoder, sizes: [usize; 4]) -> Listing {
+    let mut decoder = decoder;
+    let mut rest = input;
+    let mut turn = 0;
+    let mut piece = |want: u64, rest: &[u8]| {
+        turn += 1;
+        usize::try_from(want)
+            .unwrap_or(usize::MAX)
+            .min(sizes[turn % sizes.len()])
+            .min(rest.len())
+    };
+    let mut members = Vec::new();
+    let mut finishing = false;
+    let end = loop {
+        let step = match decoder.step() {
+            Ok(step) => step,
+            Err(err) => break Err(refusal(&err)),
+        };
+        match step {
+            Step::Read(buf) => {
+                let count = piece(buf.len() as u64, rest);
+                buf[..count].copy_from_slice(&rest[..count]);
+                rest = &rest[count..];
+                decoder.filled(count);
+            }
+            Step::Skip(count) => {
+                let count = piece(count, rest);
+                rest = &rest[count..];
+                decoder.skipped(count as u64);
+            }
+            Step::Entry(entry) => {
+                assert!(!finishing, "finishing delivers no member");
+                let expand = entry.sparse().is_none_or(|map| map.real_size() <= EXPAND);
+                let want = if expand { entry.size() } else { stored(&entry) };
+                let mut data = Vec::new();
+                let read = loop {
+                    assert!(data.len() as u64 <= want, "the data runs past its size");
+                    let chunk = if expand {
+                        decoder.data()
+                    } else {
+                        decoder.stored_data()
+                    };
+                    match chunk {
+                        Ok(Chunk::Read(count)) => {
+                            let count = piece(count, rest);
+                            data.extend_from_slice(&rest[..count]);
+                            rest = &rest[count..];
+                            decoder.data_read(count as u64);
+                        }
+                        Ok(Chunk::Zeros(count)) => {
+                            let count = piece(count, &[0; 4096]).max(1);
+                            data.resize(data.len() + count, 0);
+                            decoder.data_read(count as u64);
+                        }
+                        Ok(Chunk::End) => break Ok(()),
+                        Err(err) => break Err(err),
+                    }
+                };
+                match read {
+                    Ok(()) => members.push(Member {
+                        entry,
+                        data: Some(data),
+                    }),
+                    Err(err) => {
+                        members.push(Member { entry, data: None });
+                        let again = decoder.step().expect_err("a refusal is final");
+                        assert_eq!(refusal(&again), refusal(&err));
+                        break Err(refusal(&err));
+                    }
+                }
+            }
+            Step::End if finishing => {
+                break Ok(decoder
+                    .trailing_global()
+                    .iter()
+                    .map(|(keyword, value)| (keyword.to_vec(), value.to_vec()))
+                    .collect());
+            }
+            Step::End => {
+                decoder.finish(TRAILING);
+                finishing = true;
+            }
+        }
+    };
+    if let Err((kind, offset)) = &end {
+        let again = decoder.step().expect_err("a refusal is final");
+        assert_eq!((again.kind(), again.offset()), (kind, *offset));
+    }
+    Listing { members, end }
+}
+
 /// `narrow`'s members are `wide`'s first, and where `narrow` reads the whole
 /// archive, `wide` reads the same.
 fn contained(narrow: &Listing, wide: &Listing, what: &str) {
@@ -201,7 +306,13 @@ fuzz_target!(|input: &[u8]| {
                 false,
                 length,
             );
+            let decoding = decode(
+                input,
+                Decoder::new().with_level(level).with_global_headers(mode),
+                split(input),
+            );
             assert_eq!(reading, seeking, "{level:?} {mode:?}");
+            assert_eq!(reading, decoding, "{level:?} {mode:?}, {:?}", split(input));
             assert_eq!(reading.without_data(), skipping, "{level:?} {mode:?}");
             assert_eq!(skipping, seeking_skipping, "{level:?} {mode:?}");
             listings.push(((level, mode), reading));

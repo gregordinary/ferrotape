@@ -1,5 +1,16 @@
 pub mod ferrotape
 pub mod ferrotape::differences
+pub enum ferrotape::Chunk
+pub ferrotape::Chunk::End
+pub ferrotape::Chunk::Read(u64)
+pub ferrotape::Chunk::Zeros(u64)
+impl core::marker::Freeze for ferrotape::Chunk
+impl core::marker::Send for ferrotape::Chunk
+impl core::marker::Sync for ferrotape::Chunk
+impl core::marker::Unpin for ferrotape::Chunk
+impl core::marker::UnsafeUnpin for ferrotape::Chunk
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Chunk
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Chunk
 #[non_exhaustive] pub enum ferrotape::EntryKind
 pub ferrotape::EntryKind::BlockDevice
 pub ferrotape::EntryKind::CharDevice
@@ -260,6 +271,18 @@ impl core::marker::Unpin for ferrotape::SparseFlaw
 impl core::marker::UnsafeUnpin for ferrotape::SparseFlaw
 impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::SparseFlaw
 impl core::panic::unwind_safe::UnwindSafe for ferrotape::SparseFlaw
+pub enum ferrotape::Step<'a>
+pub ferrotape::Step::End
+pub ferrotape::Step::Entry(ferrotape::Entry)
+pub ferrotape::Step::Read(&'a mut [u8])
+pub ferrotape::Step::Skip(u64)
+impl<'a> core::marker::Freeze for ferrotape::Step<'a>
+impl<'a> core::marker::Send for ferrotape::Step<'a>
+impl<'a> core::marker::Sync for ferrotape::Step<'a>
+impl<'a> core::marker::Unpin for ferrotape::Step<'a>
+impl<'a> core::marker::UnsafeUnpin for ferrotape::Step<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Step<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for ferrotape::Step<'a>
 #[non_exhaustive] pub enum ferrotape::TextField
 pub ferrotape::TextField::Gname
 pub ferrotape::TextField::LinkTarget
@@ -329,6 +352,31 @@ impl<'a, R> core::marker::Unpin for ferrotape::Data<'a, R>
 impl<'a, R> core::marker::UnsafeUnpin for ferrotape::Data<'a, R>
 impl<'a, R> core::panic::unwind_safe::RefUnwindSafe for ferrotape::Data<'a, R> where R: core::panic::unwind_safe::RefUnwindSafe
 impl<'a, R> !core::panic::unwind_safe::UnwindSafe for ferrotape::Data<'a, R>
+pub struct ferrotape::Decoder
+impl ferrotape::Decoder
+pub fn ferrotape::Decoder::data(&mut self) -> core::result::Result<ferrotape::Chunk, ferrotape::Error>
+pub fn ferrotape::Decoder::data_read(&mut self, u64)
+pub fn ferrotape::Decoder::data_remaining(&self) -> u64
+pub fn ferrotape::Decoder::filled(&mut self, usize)
+pub fn ferrotape::Decoder::finish(&mut self, u64)
+pub fn ferrotape::Decoder::new() -> ferrotape::Decoder
+pub fn ferrotape::Decoder::offset(&self) -> u64
+pub fn ferrotape::Decoder::skipped(&mut self, u64)
+pub fn ferrotape::Decoder::step(&mut self) -> core::result::Result<ferrotape::Step<'_>, ferrotape::Error>
+pub fn ferrotape::Decoder::stored_data(&mut self) -> core::result::Result<ferrotape::Chunk, ferrotape::Error>
+pub fn ferrotape::Decoder::trailing_global(&self) -> &ferrotape::PaxRecords
+pub fn ferrotape::Decoder::with_global_headers(self, ferrotape::GlobalHeaders) -> ferrotape::Decoder
+pub fn ferrotape::Decoder::with_level(self, ferrotape::Level) -> ferrotape::Decoder
+pub fn ferrotape::Decoder::with_limits(self, ferrotape::Limits) -> ferrotape::Decoder
+impl core::default::Default for ferrotape::Decoder
+pub fn ferrotape::Decoder::default() -> ferrotape::Decoder
+impl core::marker::Freeze for ferrotape::Decoder
+impl core::marker::Send for ferrotape::Decoder
+impl core::marker::Sync for ferrotape::Decoder
+impl core::marker::Unpin for ferrotape::Decoder
+impl core::marker::UnsafeUnpin for ferrotape::Decoder
+impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Decoder
+impl core::panic::unwind_safe::UnwindSafe for ferrotape::Decoder
 #[non_exhaustive] pub struct ferrotape::Entry
 impl ferrotape::Entry
 pub fn ferrotape::Entry::atime(&self) -> core::option::Option<ferrotape::Timestamp>

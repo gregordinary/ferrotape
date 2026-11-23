@@ -162,7 +162,10 @@ input that fails is saved under `fuzz/artifacts/` and replays with
   are bytes: nothing in the API is an `OsStr` or a `Path`.
 - **Room to grow.** A public struct or enum that can gain a field or variant
   is `#[non_exhaustive]`, and a member's properties are read through methods
-  rather than fields. An addition is then not a breaking change.
+  rather than fields. An addition is then not a breaking change. The
+  decoder's `Step` and `Chunk` are the exception. A driver cannot act on a
+  variant it does not know, so both are exhaustive, and a new variant is a
+  breaking change that every driver's `match` reports.
 - **Errors are typed and say what.** An error names the rule an archive
   breaks and its offset in the stream, as structured fields rather than
   strings. A refusal names what the reference readers disagree about, in a

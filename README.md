@@ -90,6 +90,11 @@ A compressed archive is read through its decoder, from a crate of its own:
 and bzip2. `Reader::finish` reads on to the end of the stream, so the decoder
 compares the check that closes it.
 
+A `Decoder` is the reader without I/O. It reads a source that a `Read` does
+not fit, such as an asynchronous stream or a buffer filled as data arrives.
+It says what it needs next and frames every member's data itself. Its caller
+only moves bytes, and every rule and limit applies as in a `Reader`.
+
 ## Writing
 
 A `Header` describes a member, and a `Writer` appends each member's header

@@ -1,19 +1,14 @@
-//! The reader: the parser driven over a byte source, and the data of the
+//! The reader: a [`Decoder`] driven over a byte source, and the data of the
 //! member it has reached.
 
 use alloc::vec::Vec;
 use std::io::{self, Read, Seek, SeekFrom};
 
+use crate::decoder::{Chunk, Decoder, Step};
 use crate::entry::Entry;
-use crate::error::{Error, ErrorKind, Truncation};
-use crate::header::BLOCK;
-use crate::parser::{Parser, Step};
+use crate::error::{Error, ErrorKind};
 use crate::pax::PaxRecords;
 use crate::settings::{GlobalHeaders, Level, Limits};
-use crate::sparse::Region;
-
-/// [`BLOCK`] as the type sizes and offsets are counted in.
-const BLOCK_LEN: u64 = BLOCK as u64;
 
 /// The most [`Reader::read_entry`] reserves before a member's data arrives.
 ///
@@ -22,6 +17,9 @@ const BLOCK_LEN: u64 = BLOCK as u64;
 /// what the archive holds. Members read whole are a few kilobytes in
 /// practice, so this covers them in one allocation.
 const RESERVE: usize = 64 * 1024;
+
+/// The most read at once from a source to pass over bytes of it.
+const SCRATCH: usize = 4096;
 
 /// Passes over bytes of the source by seeking: up to the count asked for,
 /// and no further than the source's end. Returns how many it passed over.
@@ -54,76 +52,17 @@ type SeekPast<R> = fn(&mut R, u64) -> io::Result<u64>;
 /// resumed past a refusal would read members no other reader sees. The
 /// one exception is [`ErrorKind::EntryLimit`], a refusal made before anything
 /// is read.
+///
+/// A reader is a [`Decoder`] driven over its source: a source that is not a
+/// [`Read`] is read by driving a decoder directly.
 #[derive(Debug)]
 pub struct Reader<R> {
     inner: R,
-    parser: Parser,
+    decoder: Decoder,
     /// Set where the source is passed over by seeking rather than read.
     seek: Option<SeekPast<R>>,
-    /// Bytes consumed from the stream.
-    offset: u64,
-    /// The current member's data not yet read.
-    data_remaining: u64,
-    /// The padding after the current member's data.
-    padding: u64,
     /// The first failure, which every later call repeats.
     failed: Option<(u64, ErrorKind)>,
-    /// Where reading the current member's file stands, for a sparse member.
-    expand: Option<Expand>,
-}
-
-/// Where reading a sparse member's file stands: the position in the file,
-/// which both [`Reader::data`] and [`Reader::stored_data`] move.
-#[derive(Debug)]
-struct Expand {
-    regions: Vec<Region>,
-    /// The first region that does not end at or before `position`.
-    next: usize,
-    position: u64,
-    real_size: u64,
-}
-
-/// What the next read of a sparse member's file delivers.
-enum Next {
-    /// This many zeros, of a hole.
-    Zeros(u64),
-    /// Up to this many stored bytes, of a region.
-    Stored(u64),
-    /// Nothing: the file, or what is stored of it, has been read.
-    End,
-}
-
-impl Expand {
-    /// What a read delivers next: the file with its holes, or, where
-    /// `stored`, its regions alone, the holes passed over.
-    fn next(&mut self, stored: bool) -> Next {
-        while self
-            .regions
-            .get(self.next)
-            .is_some_and(|region| region.end() <= self.position)
-        {
-            self.next = self.next.saturating_add(1);
-        }
-        match self.regions.get(self.next) {
-            Some(region) => {
-                if stored {
-                    self.position = self.position.max(region.offset);
-                } else if self.position < region.offset {
-                    return Next::Zeros(region.offset.saturating_sub(self.position));
-                }
-                Next::Stored(region.end().saturating_sub(self.position))
-            }
-            None if !stored && self.position < self.real_size => {
-                Next::Zeros(self.real_size.saturating_sub(self.position))
-            }
-            None => Next::End,
-        }
-    }
-
-    /// What remains of the file past the position.
-    fn remaining(&self) -> u64 {
-        self.real_size.saturating_sub(self.position)
-    }
 }
 
 impl<R: Read> Reader<R> {
@@ -136,34 +75,30 @@ impl<R: Read> Reader<R> {
     pub fn new(inner: R) -> Reader<R> {
         Reader {
             inner,
-            parser: Parser::new(),
+            decoder: Decoder::new(),
             seek: None,
-            offset: 0,
-            data_remaining: 0,
-            padding: 0,
             failed: None,
-            expand: None,
         }
     }
 
     /// The same reader, reading at `level`.
     #[must_use]
     pub fn with_level(mut self, level: Level) -> Reader<R> {
-        self.parser.set_level(level);
+        self.decoder = self.decoder.with_level(level);
         self
     }
 
     /// The same reader, reading global extended headers as `globals` says.
     #[must_use]
     pub fn with_global_headers(mut self, globals: GlobalHeaders) -> Reader<R> {
-        self.parser.set_globals(globals);
+        self.decoder = self.decoder.with_global_headers(globals);
         self
     }
 
     /// The same reader, held to `limits`.
     #[must_use]
     pub fn with_limits(mut self, limits: Limits) -> Reader<R> {
-        self.parser.set_limits(limits);
+        self.decoder = self.decoder.with_limits(limits);
         self
     }
 
@@ -242,17 +177,23 @@ impl<R: Read> Reader<R> {
     /// as [`next_entry`](Self::next_entry).
     pub fn read_entry(&mut self, limit: u64) -> Result<Vec<u8>, Error> {
         self.guarded(|reader| {
-            let size = reader
-                .expand
-                .as_ref()
-                .map_or(reader.data_remaining, Expand::remaining);
+            let size = reader.decoder.data_remaining();
             if size > limit {
                 return Err(Error::new(
-                    reader.offset,
+                    reader.decoder.offset(),
                     ErrorKind::EntryLimit { size, limit },
                 ));
             }
-            reader.read_member_whole()
+            let reserve = usize::try_from(size).map_or(RESERVE, |size| size.min(RESERVE));
+            let mut data = Vec::with_capacity(reserve);
+            let mut chunk = [0u8; 8192];
+            loop {
+                let got = reader.read_member(&mut chunk, false)?;
+                if got == 0 {
+                    return Ok(data);
+                }
+                data.extend(chunk.iter().take(got));
+            }
         })
     }
 
@@ -275,7 +216,8 @@ impl<R: Read> Reader<R> {
     ///
     /// The stream after the end is decoded only to be checked or discarded.
     /// `limit` bounds what a stream can make that cost, since a little input
-    /// can decompress to far more than any padding.
+    /// can decompress to far more than any padding. A stream with more is
+    /// refused at the offset just past the first byte over the limit.
     ///
     /// # Errors
     ///
@@ -283,35 +225,11 @@ impl<R: Read> Reader<R> {
     /// archive. Otherwise as [`next_entry`](Self::next_entry).
     pub fn finish(&mut self, limit: u64) -> Result<(), Error> {
         self.guarded(|reader| {
+            reader.decoder.finish(limit);
+            // Once finishing, the decoder delivers no member, and ends where
+            // the stream does.
             while reader.advance()?.is_some() {}
-            let zeros_only = reader.parser.level() == Level::Strict;
-            // At Strict the parser has read a block past the end already.
-            let over = || Error::new(reader.offset, ErrorKind::TrailingLimit { limit });
-            let mut remaining = limit
-                .checked_sub(reader.offset.saturating_sub(reader.parser.end()))
-                .ok_or_else(over)?;
-            let mut scratch = [0u8; 4096];
-            loop {
-                let at = reader.offset;
-                let got = match reader.inner.read(&mut scratch) {
-                    Ok(0) => return Ok(()),
-                    Ok(got) => got.min(scratch.len()),
-                    Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(err) => return Err(Error::from_source(reader.offset, err)),
-                };
-                reader.offset = reader.offset.saturating_add(got as u64);
-                if zeros_only
-                    && let Some(first) = scratch.iter().take(got).position(|byte| *byte != 0)
-                {
-                    return Err(Error::new(
-                        at.saturating_add(first as u64),
-                        ErrorKind::TrailingData,
-                    ));
-                }
-                remaining = remaining
-                    .checked_sub(got as u64)
-                    .ok_or_else(|| Error::new(reader.offset, ErrorKind::TrailingLimit { limit }))?;
-            }
+            Ok(())
         })
     }
 
@@ -324,7 +242,7 @@ impl<R: Read> Reader<R> {
     /// here.
     #[must_use]
     pub fn trailing_global(&self) -> &PaxRecords {
-        self.parser.trailing_global()
+        self.decoder.trailing_global()
     }
 
     /// Runs `op`, unless an earlier call failed, and records its failure.
@@ -344,211 +262,76 @@ impl<R: Read> Reader<R> {
         result
     }
 
-    /// [`next_entry`](Self::next_entry), unguarded: the parser driven until
+    /// [`next_entry`](Self::next_entry), unguarded: the decoder driven until
     /// it yields a member or the archive ends.
     fn advance(&mut self) -> Result<Option<Entry>, Error> {
-        if self.parser.ended() {
-            return Ok(None);
-        }
-        self.skip_current()?;
-        let mut step = Step::Block;
         loop {
-            step = match step {
-                Step::Block => {
-                    let at = self.offset;
-                    let mut block = [0u8; BLOCK];
-                    let got = self.fill(&mut block)?;
-                    let bytes = block.get(..got).unwrap_or(&block);
-                    self.parser.block(at, bytes)?
+            match self.decoder.step()? {
+                Step::Read(buf) => match read(&mut self.inner, buf) {
+                    Ok(got) => self.decoder.filled(got),
+                    Err(err) => return Err(Error::from_source(self.decoder.offset(), err)),
+                },
+                Step::Skip(count) => {
+                    let skipped = match self.seek {
+                        Some(seek_past) => seek_past(&mut self.inner, count),
+                        None => read_past(&mut self.inner, count),
+                    };
+                    match skipped {
+                        Ok(skipped) => self.decoder.skipped(skipped),
+                        Err(err) => return Err(Error::from_source(self.decoder.offset(), err)),
+                    }
                 }
-                Step::Metadata(request) => {
-                    self.expect(request.size());
-                    let data = self.read_remaining()?;
-                    self.skip_current()?;
-                    self.parser.metadata(request, data)?
-                }
-                Step::Member(entry) => {
-                    self.expect(entry.stored_len());
-                    self.expand = entry.sparse().map(|map| Expand {
-                        regions: map.regions().to_vec(),
-                        next: 0,
-                        position: 0,
-                        real_size: map.real_size(),
-                    });
-                    return Ok(Some(entry));
-                }
+                Step::Entry(entry) => return Ok(Some(entry)),
                 Step::End => return Ok(None),
-            };
-        }
-    }
-
-    /// Frames what follows a header that declares `size` bytes of data: the
-    /// data, and the padding to the next block.
-    fn expect(&mut self, size: u64) {
-        self.data_remaining = size;
-        // The distance to the next multiple of the block size. 2^64 is a
-        // multiple of it, so the negation's remainder is that distance.
-        self.padding = size.wrapping_neg() % BLOCK_LEN;
-    }
-
-    /// What remains of the current member's data, as [`data`](Self::data)
-    /// delivers it, held whole.
-    fn read_member_whole(&mut self) -> Result<Vec<u8>, Error> {
-        if self.expand.is_none() {
-            return self.read_remaining();
-        }
-        let remaining = self.expand.as_ref().map_or(0, Expand::remaining);
-        let reserve = usize::try_from(remaining).map_or(RESERVE, |size| size.min(RESERVE));
-        let mut data = Vec::with_capacity(reserve);
-        let mut chunk = [0u8; 8192];
-        loop {
-            let got = self.read_member(&mut chunk, false)?;
-            if got == 0 {
-                return Ok(data);
             }
-            data.extend(chunk.iter().take(got));
         }
     }
 
     /// Reads the current member's data into `buf`: for a sparse member, its
     /// file with the holes, or, where `stored`, its regions alone.
+    ///
+    /// The part of `buf` the data's next stored bytes go to is filled whole,
+    /// unless the stream ends inside it, which is refused.
     fn read_member(&mut self, buf: &mut [u8], stored: bool) -> Result<usize, Error> {
-        let Some(expand) = self.expand.as_mut() else {
-            return self.read_data(buf);
-        };
-        let room = buf.len() as u64;
-        match expand.next(stored) {
-            Next::End => Ok(0),
-            Next::Zeros(count) => {
-                let count = count.min(room);
-                let zeros = usize::try_from(count).unwrap_or(buf.len());
-                let filled = buf.get_mut(..zeros).unwrap_or_default();
-                filled.fill(0);
-                expand.position = expand.position.saturating_add(count);
-                Ok(filled.len())
-            }
-            Next::Stored(count) => {
-                let count = usize::try_from(count.min(room)).unwrap_or(buf.len());
-                let within = buf.get_mut(..count).unwrap_or_default();
-                let got = self.read_data(within)?;
-                if let Some(expand) = self.expand.as_mut() {
-                    expand.position = expand.position.saturating_add(got as u64);
-                }
-                Ok(got)
-            }
-        }
-    }
-
-    /// What remains of the current member's data, held whole.
-    fn read_remaining(&mut self) -> Result<Vec<u8>, Error> {
-        let reserve =
-            usize::try_from(self.data_remaining).map_or(RESERVE, |size| size.min(RESERVE));
-        let mut data = Vec::with_capacity(reserve);
-        let mut chunk = [0u8; 8192];
-        // Each read delivers at least one byte or fails, so this ends.
-        while self.data_remaining > 0 {
-            let got = self.read_data(&mut chunk)?;
-            data.extend(chunk.iter().take(got));
-        }
-        Ok(data)
-    }
-
-    /// Reads the current member's data into `buf`, as far as either reaches.
-    fn read_data(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let remaining = usize::try_from(self.data_remaining).unwrap_or(usize::MAX);
-        let buf = match buf.split_at_mut_checked(remaining) {
-            Some((within, _)) => within,
-            None => buf,
-        };
         if buf.is_empty() {
             return Ok(0);
         }
-        let got = self.fill(buf)?;
-        self.data_remaining = self.data_remaining.saturating_sub(got as u64);
-        // Every byte asked for is one the member declares.
-        if got < buf.len() {
-            return Err(Error::new(
-                self.offset,
-                ErrorKind::Truncated(Truncation::Data),
-            ));
-        }
-        Ok(got)
-    }
-
-    /// Skips what remains of the current member: its unread data, then its
-    /// padding.
-    fn skip_current(&mut self) -> Result<(), Error> {
-        self.expand = None;
-        let data = core::mem::take(&mut self.data_remaining);
-        let padding = core::mem::take(&mut self.padding);
-        // At most a header's size field and a block, which a `u64` holds.
-        self.skip(data.saturating_add(padding))
-    }
-
-    /// Passes over `count` bytes of the member's data and padding: by seeking
-    /// where the reader was made to, and otherwise by reading them.
-    fn skip(&mut self, count: u64) -> Result<(), Error> {
-        if count == 0 {
-            return Ok(());
-        }
-        let skipped = match self.seek {
-            Some(seek_past) => {
-                let skipped = seek_past(&mut self.inner, count)
-                    .map_err(|err| Error::from_source(self.offset, err))?;
-                self.offset = self.offset.saturating_add(skipped);
-                skipped
-            }
-            None => self.read_past(count)?,
+        let chunk = if stored {
+            self.decoder.stored_data()?
+        } else {
+            self.decoder.data()?
         };
-        if skipped < count {
-            return Err(Error::new(
-                self.offset,
-                ErrorKind::Truncated(Truncation::Data),
-            ));
-        }
-        Ok(())
-    }
-
-    /// Reads past up to `count` bytes, returning how many the source held.
-    fn read_past(&mut self, count: u64) -> Result<u64, Error> {
-        let mut scratch = [0u8; 4096];
-        let mut skipped: u64 = 0;
-        while skipped < count {
-            let want = usize::try_from(count.saturating_sub(skipped)).unwrap_or(usize::MAX);
-            let buf = match scratch.split_at_mut_checked(want) {
-                Some((within, _)) => within,
-                None => scratch.as_mut_slice(),
-            };
-            let got = self.fill(buf)?;
-            skipped = skipped.saturating_add(got as u64);
-            if got < buf.len() {
-                break;
+        let room = buf.len() as u64;
+        match chunk {
+            Chunk::End => Ok(0),
+            Chunk::Zeros(count) => {
+                let count = usize::try_from(count.min(room)).unwrap_or(buf.len());
+                let zeros = buf.get_mut(..count).unwrap_or_default();
+                zeros.fill(0);
+                self.decoder.data_read(zeros.len() as u64);
+                Ok(zeros.len())
             }
-        }
-        Ok(skipped)
-    }
-
-    /// Fills `buf` from the source as far as it reaches, retrying a read a
-    /// signal interrupted. The archive can arrive over a pipe or a socket, in
-    /// a process whose signal handlers do not restart the calls they
-    /// interrupt. An interruption is not a broken archive.
-    fn fill(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let mut filled = 0;
-        while let Some(rest) = buf.get_mut(filled..)
-            && !rest.is_empty()
-        {
-            match self.inner.read(rest) {
-                Ok(0) => break,
-                Ok(got) => {
-                    let got = got.min(rest.len());
+            Chunk::Read(count) => {
+                let count = usize::try_from(count.min(room)).unwrap_or(buf.len());
+                let within = buf.get_mut(..count).unwrap_or_default();
+                let mut filled = 0;
+                while let Some(rest) = within.get_mut(filled..)
+                    && !rest.is_empty()
+                {
+                    let got = read(&mut self.inner, rest)
+                        .map_err(|err| Error::from_source(self.decoder.offset(), err))?;
+                    self.decoder.data_read(got as u64);
+                    if got == 0 {
+                        // The stream has ended inside the data, which the
+                        // decoder now refuses.
+                        self.decoder.data()?;
+                        break;
+                    }
                     filled = filled.saturating_add(got);
-                    self.offset = self.offset.saturating_add(got as u64);
                 }
-                Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
-                Err(err) => return Err(Error::from_source(self.offset, err)),
+                Ok(filled)
             }
         }
-        Ok(filled)
     }
 }
 
@@ -569,6 +352,30 @@ impl<R: Read + Seek> Reader<R> {
         reader.seek = Some(seek_past::<R>);
         reader
     }
+}
+
+/// Reads from `inner` into `buf`, retrying a read a signal interrupted. The
+/// archive can arrive over a pipe or a socket, in a process whose signal
+/// handlers do not restart the calls they interrupt. An interruption is not a
+/// broken archive. Returns how many bytes arrived, zero where the source has
+/// ended.
+fn read<R: Read>(inner: &mut R, buf: &mut [u8]) -> io::Result<usize> {
+    loop {
+        match inner.read(buf) {
+            Ok(got) => return Ok(got.min(buf.len())),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+/// Reads past up to `count` bytes of `inner`, at most [`SCRATCH`] at once.
+/// Returns how many it passed over, zero where the source has ended.
+fn read_past<R: Read>(inner: &mut R, count: u64) -> io::Result<u64> {
+    let mut scratch = [0u8; SCRATCH];
+    let want = usize::try_from(count).map_or(SCRATCH, |count| count.min(SCRATCH));
+    let buf = scratch.get_mut(..want).unwrap_or_default();
+    read(inner, buf).map(|got| got as u64)
 }
 
 /// Seeks `inner` past up to `count` bytes, no further than its end, and
