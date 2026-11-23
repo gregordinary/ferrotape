@@ -25,4 +25,11 @@ missing_docs = "warn"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 
+# `std` holds what reads and writes through `std::io`: `Reader`, `Writer` and
+# the conversions into `io::Error`. Without it, the library builds on `core`
+# and `alloc`, and archives are read through `Decoder`.
+[features]
+default = ["std"]
+std = []
+
 [dependencies]

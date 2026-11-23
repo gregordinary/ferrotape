@@ -50,10 +50,18 @@ jobs:
         # A library build links nothing, so the Windows target builds from
         # Linux, with the same effect for a Unix-only interface.
         run: cargo build --lib --target x86_64-pc-windows-msvc
-      - name: Clippy on a 32-bit target
+      - name: Build without std
+        # Without the `std` feature the library needs only `core` and `alloc`.
+        # A target with no standard library at all fails to build on any use
+        # of `std` that the feature does not gate.
+        run: cargo build --lib --no-default-features --target thumbv7em-none-eabihf
+      - name: Clippy on 32-bit targets
         # Some lints turn on the width of a pointer, so an expectation met on
-        # a 64-bit host can go unmet where a pointer is 4 bytes.
-        run: cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
+        # a 64-bit host can go unmet where a pointer is 4 bytes. WebAssembly is
+        # linted with `std`, the target without a standard library without it.
+        run: |
+          cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
+          cargo clippy --lib --no-default-features --target thumbv7em-none-eabihf -- -D warnings
 
   msrv:
     name: MSRV

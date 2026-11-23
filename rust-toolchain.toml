@@ -8,6 +8,8 @@
 # supported Rust version, which is `rust-version` in Cargo.toml.
 channel = "1.100.0"
 components = ["rustfmt", "clippy"]
-# Two targets the library is built for to show that it uses nothing particular
-# to Unix: WebAssembly with no operating system beneath it, and Windows.
-targets = ["wasm32-unknown-unknown", "x86_64-pc-windows-msvc"]
+# Targets the library is built for to show that it uses nothing particular to
+# Unix: WebAssembly with no operating system beneath it, and Windows; and one
+# with no standard library, which the library builds for without its `std`
+# feature.
+targets = ["wasm32-unknown-unknown", "x86_64-pc-windows-msvc", "thumbv7em-none-eabihf"]

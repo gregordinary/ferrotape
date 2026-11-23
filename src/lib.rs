@@ -196,7 +196,7 @@
 //! bytes or bytes to pass over, and its caller moves them. A source that a
 //! `Read` does not fit is read by driving a decoder directly. Such a source is
 //! an asynchronous stream, a buffer an interrupt fills, or an archive in
-//! memory. The decoder counts every byte, and itself
+//! memory in a build without `std`. The decoder counts every byte, and itself
 //! frames each member's data and the padding after it. A driver never
 //! computes a size or an offset, and every rule and limit applies as it does
 //! in a reader.
@@ -298,7 +298,8 @@
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //!
-//! [`Decoder`]'s documentation reads an archive in memory.
+//! [`Decoder`]'s documentation shows an archive in memory read without
+//! `std`.
 //!
 //! # Writing
 //!
@@ -334,7 +335,21 @@
 //! Paths, link targets and owner names are the archive's bytes. The caller
 //! decides which paths are acceptable (an absolute one, or one with a `..`
 //! component), and everything about writing members to a filesystem.
+//!
+//! # Features
+//!
+//! `std`, on by default, holds what reads and writes through `std::io`:
+//!
+//! - [`Reader`] and [`Data`]
+//! - [`Writer`] and [`WriteError`]
+//! - The conversions of [`Error`] and `WriteError` into `io::Error`
+//!
+//! Without it, the library needs only `core` and `alloc`. It reads archives
+//! through [`Decoder`] and encodes headers with [`Header::encode`], and
+//! everything else is the same.
 
+// Without the `std` feature, the library builds on `core` and `alloc` alone.
+#![cfg_attr(not(feature = "std"), no_std)]
 // Archives come from sources the caller does not control, so a panic in library
 // code is a decision made where the code is written rather than a finding a
 // fuzzer reports later. Each lint below names a way to panic, or to compute a
@@ -372,6 +387,8 @@
 )]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 mod decoder;
 pub mod differences;
@@ -382,9 +399,11 @@ mod escaped;
 mod header;
 mod parser;
 mod pax;
+#[cfg(feature = "std")]
 mod reader;
 mod settings;
 mod sparse;
+#[cfg(feature = "std")]
 mod writer;
 
 pub use decoder::{Chunk, Decoder, Step};
@@ -394,9 +413,11 @@ pub use error::{
     Error, ErrorKind, HeaderField, Keyword, Metadata, Numeric, PaxFraming, SparseFlaw, Truncation,
 };
 pub use pax::{AclRecords, PaxRecords, Records, Xattrs};
+#[cfg(feature = "std")]
 pub use reader::{Data, Reader};
 pub use settings::{GlobalHeaders, Level, Limits};
 pub use sparse::{Region, Sparse};
+#[cfg(feature = "std")]
 pub use writer::{WriteError, Writer};
 
 // The README's examples are compiled as doctests, so they keep to the API.

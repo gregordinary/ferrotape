@@ -355,7 +355,9 @@ impl Header {
         Ok(out)
     }
 
-    /// The length of the member's data.
+    /// The length of the member's data, which the [`Writer`](crate::Writer)
+    /// reads.
+    #[cfg(feature = "std")]
     pub(crate) fn size(&self) -> u64 {
         self.size
     }

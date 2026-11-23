@@ -77,7 +77,9 @@ cargo test --workspace --all-features
 cargo doc --workspace --all-features --no-deps    # RUSTDOCFLAGS='-D warnings'
 cargo build --lib --target wasm32-unknown-unknown
 cargo build --lib --target x86_64-pc-windows-msvc
+cargo build --lib --no-default-features --target thumbv7em-none-eabihf
 cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
+cargo clippy --lib --no-default-features --target thumbv7em-none-eabihf -- -D warnings
 cargo +1.91 test --workspace --all-features    # RUSTFLAGS='-D warnings'
 cargo deny check licenses advisories sources
 cargo deny --manifest-path fuzz/Cargo.toml check licenses advisories sources
@@ -86,8 +88,10 @@ cargo deny --manifest-path fuzz/Cargo.toml check licenses advisories sources
 The builds for WebAssembly, with no operating system beneath it, and for
 Windows show that the library uses nothing particular to Unix. A stray use of
 a Unix-only interface fails to build there, where on Linux it would compile.
-Clippy runs again for WebAssembly, a 32-bit target, since some lints turn on
-the width of a pointer.
+The build for `thumbv7em-none-eabihf`, a target with no standard library,
+shows that without its `std` feature the library needs only `core` and
+`alloc`. Clippy runs again on the two 32-bit targets, since some lints turn
+on the width of a pointer.
 
 The `+1.91` run is the tests under the minimum supported Rust version, which
 sits below the pinned toolchain, and needs that toolchain installed. The two

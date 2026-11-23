@@ -27,8 +27,8 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
 - `Reader::seeking`, for a source that can seek: data the caller does not
   read is passed over by seeking, each seek held to the source's length.
 - `Decoder`, the reader without I/O, for a source a `Read` does not fit (an
-  asynchronous stream, a buffer filled as data arrives, an archive in
-  memory). `step` says what it needs next (`Step`: the
+  asynchronous stream, a buffer filled as data arrives, an archive in memory
+  in a build without `std`). `step` says what it needs next (`Step`: the
   stream's next bytes, read into a buffer it lends, or bytes to pass over),
   or yields a member or the archive's end. `data` and `stored_data` say what
   a member's data holds next (`Chunk`). `filled`, `skipped` and `data_read`
@@ -36,6 +36,9 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   decoder counts every byte, and itself frames each member's data and
   padding. Every rule, level, mode and limit of `Reader` applies, since a
   `Reader` is a decoder driven over a `Read`.
+- A `std` feature, on by default, holding `Reader`, `Data`, `Writer`,
+  `WriteError` and the conversions into `io::Error`. Without it the library
+  builds on `core` and `alloc` alone.
 - Sparse members, in GNU's old form (typeflag `S`) and pax formats 0.0, 0.1
   and 1.0. `data` delivers the file with its holes as zeros, and
   `Entry::size` is its real size. `Entry::sparse` gives its map (`Sparse`,

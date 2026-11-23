@@ -93,7 +93,9 @@ compares the check that closes it.
 A `Decoder` is the reader without I/O. It reads a source that a `Read` does
 not fit, such as an asynchronous stream or a buffer filled as data arrives.
 It says what it needs next and frames every member's data itself. Its caller
-only moves bytes, and every rule and limit applies as in a `Reader`.
+only moves bytes, and every rule and limit applies as in a `Reader`. Without
+its default `std` feature, the library builds on `core` and `alloc` alone and
+reads through a `Decoder`.
 
 ## Writing
 

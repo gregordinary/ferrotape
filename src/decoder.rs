@@ -25,9 +25,9 @@ const RESERVE: u64 = 64 * 1024;
 ///
 /// A [`Reader`](crate::Reader) is a `Decoder` driven over a
 /// [`Read`](std::io::Read). A source that a `Read` does not fit (an
-/// asynchronous stream, a buffer an interrupt fills, an archive in memory)
-/// is read by driving a `Decoder` directly. Its [`step`](Self::step) says
-/// what to do:
+/// asynchronous stream, a buffer an interrupt fills, an archive in memory in
+/// a build without `std`) is read by driving a `Decoder` directly. Its
+/// [`step`](Self::step) says what to do:
 ///
 /// - [`Step::Read`]: copy the stream's next bytes into the buffer it lends,
 ///   as many as are at hand, and report how many with
@@ -56,7 +56,7 @@ const RESERVE: u64 = 64 * 1024;
 /// [`with_limits`](Self::with_limits). Once a call refuses the archive, every
 /// later call fails with the same kind and offset.
 ///
-/// An archive in memory:
+/// An archive in memory, read without `std`:
 ///
 /// ```
 /// use ferrotape::{Chunk, Decoder, Step};

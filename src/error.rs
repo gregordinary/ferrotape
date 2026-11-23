@@ -3,6 +3,7 @@
 
 use alloc::vec::Vec;
 use core::fmt;
+#[cfg(feature = "std")]
 use std::io;
 
 use crate::entry::EntryKind;
@@ -23,6 +24,7 @@ use crate::entry::EntryKind;
 pub struct Error {
     offset: u64,
     kind: ErrorKind,
+    #[cfg(feature = "std")]
     source: Option<io::Error>,
 }
 
@@ -33,6 +35,7 @@ impl Error {
         Error {
             offset,
             kind,
+            #[cfg(feature = "std")]
             source: None,
         }
     }
@@ -45,6 +48,7 @@ impl Error {
     /// [`ErrorKind::Io`], with `err` as its source. A caller that retries such
     /// a failure can tell it from a refused archive, which a retry will not
     /// mend.
+    #[cfg(feature = "std")]
     pub(crate) fn from_source(offset: u64, err: io::Error) -> Error {
         match err.downcast::<Error>() {
             Ok(carried) => carried,
@@ -80,6 +84,7 @@ impl fmt::Display for Error {
 }
 
 impl core::error::Error for Error {
+    #[cfg(feature = "std")]
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         self.source
             .as_ref()
@@ -87,6 +92,7 @@ impl core::error::Error for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<Error> for io::Error {
     /// The source's own failure, for [`ErrorKind::Io`]. For any other kind,
     /// an [`io::Error`] that carries it, which `io::Error::downcast` recovers.
