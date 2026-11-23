@@ -870,7 +870,7 @@ fn a_default_list_on_a_member_that_is_not_a_directory_is_refused() {
     );
     assert_eq!(
         err.to_string(),
-        "a regular file, which is not a directory, carries a default access control list at \
+        "a regular file, which is not a directory, has a default access control list at \
          offset 1024",
     );
 
@@ -1198,7 +1198,7 @@ fn a_regular_member_named_as_a_directory_carries_only_records_every_reader_reads
     let err = with_records(&pax_records(&[(b"VENDOR.k", b"v"), (b"path", b"d/")])).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "a regular member named as a directory carries `VENDOR.k`, after which readers part \
+        "a regular member named as a directory has `VENDOR.k`, after which readers part \
          over its type at offset 1024",
     );
 }

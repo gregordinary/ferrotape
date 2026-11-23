@@ -570,7 +570,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::Truncated(truncation) => write!(f, "the archive ends {truncation}"),
             ErrorKind::Checksum => f.write_str("the header checksum does not match"),
             ErrorKind::NotAHeader => f.write_str(
-                "the block is not a tar header: it carries no ustar or GNU magic and its \
+                "the block is not a tar header: it holds no ustar or GNU magic and its \
                  checksum does not match",
             ),
             ErrorKind::HeaderField {
@@ -647,7 +647,7 @@ impl fmt::Display for ErrorKind {
                 value.escape_ascii(),
             ),
             ErrorKind::SpecialBitsWithAcl => f.write_str(
-                "a member with setuid, setgid or sticky carries an access control list, \
+                "a member with setuid, setgid or sticky has an access control list, \
                  and readers extract it with different modes",
             ),
             ErrorKind::FractionBeforeEpoch { keyword } => write!(
@@ -705,7 +705,7 @@ impl fmt::Display for ErrorKind {
             }
             ErrorKind::DirectoryWithRecord { keyword } => write!(
                 f,
-                "a regular member named as a directory carries `{}`, after which readers part \
+                "a regular member named as a directory has `{}`, after which readers part \
                  over its type",
                 keyword.escape_ascii(),
             ),
@@ -715,7 +715,7 @@ impl fmt::Display for ErrorKind {
                 typeflag.escape_ascii(),
             ),
             ErrorKind::SizeWithoutData { kind } => {
-                write!(f, "a {kind}, which carries no data, declares a size")
+                write!(f, "a {kind}, which has no data, declares a size")
             }
             ErrorKind::TargetWithoutLink { kind } => write!(
                 f,
@@ -723,7 +723,7 @@ impl fmt::Display for ErrorKind {
             ),
             ErrorKind::DefaultAclWithoutDirectory { kind } => write!(
                 f,
-                "a {kind}, which is not a directory, carries a default access control list",
+                "a {kind}, which is not a directory, has a default access control list",
             ),
             ErrorKind::SparseFields => f.write_str(
                 "a GNU header that is not a sparse member holds an old sparse header's fields",

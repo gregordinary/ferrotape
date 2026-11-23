@@ -239,7 +239,7 @@ fn setuid_setgid_or_sticky_beside_an_access_list_is_refused_in_strict() {
     let archive = Tar::new().pax(b'x', &list).header(&member).finish();
     assert_eq!(
         first(&archive).unwrap_err().to_string(),
-        "a member with setuid, setgid or sticky carries an access control list, and readers \
+        "a member with setuid, setgid or sticky has an access control list, and readers \
          extract it with different modes at offset 1024",
     );
 }
@@ -269,7 +269,7 @@ fn a_hard_link_declaring_a_size_is_refused_at_both_levels() {
     }
     assert_eq!(
         paths(&archive).unwrap_err().to_string(),
-        "a hard link, which carries no data, declares a size at offset 512",
+        "a hard link, which has no data, declares a size at offset 512",
     );
 }
 
