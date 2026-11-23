@@ -77,18 +77,23 @@ cargo test --workspace --all-features
 cargo doc --workspace --all-features --no-deps    # RUSTDOCFLAGS='-D warnings'
 cargo build --lib --target wasm32-unknown-unknown
 cargo build --lib --target x86_64-pc-windows-msvc
+cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
 cargo +1.91 test --workspace --all-features    # RUSTFLAGS='-D warnings'
 cargo deny check licenses advisories sources
 cargo deny --manifest-path fuzz/Cargo.toml check licenses advisories sources
 ```
 
-The fifth and sixth build the library for WebAssembly with no operating system
-beneath it, and for Windows. A stray use of a Unix-only interface fails to
-build there, where on Linux it would compile. The seventh runs the tests under
-the minimum supported Rust version, which sits below the pinned toolchain, and
-needs that toolchain installed. The last two check the licenses, advisories
-and sources of two dependency graphs: the library's, and the fuzzing
-harness's, which holds the only third-party crates. They need
+The builds for WebAssembly, with no operating system beneath it, and for
+Windows show that the library uses nothing particular to Unix. A stray use of
+a Unix-only interface fails to build there, where on Linux it would compile.
+Clippy runs again for WebAssembly, a 32-bit target, since some lints turn on
+the width of a pointer.
+
+The `+1.91` run is the tests under the minimum supported Rust version, which
+sits below the pinned toolchain, and needs that toolchain installed. The two
+`cargo deny` runs check the licenses, advisories and sources of the library's
+dependency graph and of the fuzzing harness's. The harness holds the only
+third-party crates. Both runs need
 [cargo-deny](https://github.com/EmbarkStudios/cargo-deny).
 
 The public API is recorded in `public-api.txt`, and CI fails on any change to

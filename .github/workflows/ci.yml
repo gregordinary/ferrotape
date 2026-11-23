@@ -50,6 +50,10 @@ jobs:
         # A library build links nothing, so the Windows target builds from
         # Linux, with the same effect for a Unix-only interface.
         run: cargo build --lib --target x86_64-pc-windows-msvc
+      - name: Clippy on a 32-bit target
+        # Some lints turn on the width of a pointer, so an expectation met on
+        # a 64-bit host can go unmet where a pointer is 4 bytes.
+        run: cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
 
   msrv:
     name: MSRV

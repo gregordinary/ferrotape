@@ -34,9 +34,14 @@ const POSIX_MAGIC: &[u8] = b"ustar\x0000";
 
 /// What the driver does next.
 #[derive(Debug)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "a step is acted on and dropped at once, so the member's size is a copy, not memory held"
+// The lint's threshold is in bytes, and a member's size follows the
+// width of a pointer: it is past the threshold on 64-bit targets alone.
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "a step is acted on and dropped at once, so the member's size is a copy, not memory held"
+    )
 )]
 pub(crate) enum Step {
     /// Read the next block, or as much of it as the stream holds, and hand it
