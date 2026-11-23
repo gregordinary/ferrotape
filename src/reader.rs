@@ -187,13 +187,19 @@ impl<R: Read> Reader<R> {
             let reserve = usize::try_from(size).map_or(RESERVE, |size| size.min(RESERVE));
             let mut data = Vec::with_capacity(reserve);
             let mut chunk = [0u8; 8192];
-            loop {
-                let got = reader.read_member(&mut chunk, false)?;
+            // Reading stops at the size checked against `limit`, where the
+            // data ends, so what is held never passes the limit.
+            let mut left = size;
+            while left > 0 {
+                let want = usize::try_from(left).map_or(chunk.len(), |left| left.min(chunk.len()));
+                let got = reader.read_member(chunk.get_mut(..want).unwrap_or_default(), false)?;
                 if got == 0 {
-                    return Ok(data);
+                    break;
                 }
                 data.extend(chunk.iter().take(got));
+                left = left.saturating_sub(got as u64);
             }
+            Ok(data)
         })
     }
 
