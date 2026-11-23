@@ -2,11 +2,11 @@
 //! fields, read and written. One module holds both directions, so that the
 //! layout is stated once.
 //!
-//! v7 is read as a subset of ustar rather than as a separate format: the first
-//! 257 bytes of a header are laid out identically, and what v7 lacks is
-//! everything after them, the magic, the version, the owner names, the device
-//! numbers and the prefix. A v7 header is read as a ustar one whose fields
-//! past byte 257 are absent.
+//! v7 is read as a subset of ustar rather than as a separate format. The first
+//! 257 bytes of a header are laid out identically. v7 lacks everything after
+//! them: the magic, the version, the owner names, the device numbers and the
+//! prefix. A v7 header is read as a ustar one whose fields past byte 257
+//! are absent.
 
 use alloc::vec::Vec;
 use core::ops::Range;
@@ -42,7 +42,7 @@ const DEVMAJOR: Range<usize> = 329..337;
 const DEVMINOR: Range<usize> = 337..345;
 const PREFIX: Range<usize> = 345..500;
 
-/// Which header layout a block carries, by its six bytes of magic alone; the
+/// The header layout a block holds, by its six bytes of magic alone. The
 /// version is weighed where it matters (`Fields::exact_magic`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Magic {
@@ -78,15 +78,14 @@ pub(crate) struct Fields {
     /// them: whatever the member's type, as every header with magic does.
     pub(crate) device: Option<(u32, u32)>,
     /// Whether a header without the POSIX magic has bytes where POSIX keeps a
-    /// name prefix, which Python joins to its name and no other reader does.
+    /// name prefix. Python joins them to its name, and no other reader does.
     pub(crate) stray_prefix: bool,
     /// Whether a POSIX header's prefix ends in `/`, which bsdtar joins to the
     /// name without adding one.
     pub(crate) prefix_slash: bool,
-    /// Whether a header whose magic and version are neither POSIX's nor GNU's
-    /// exactly holds an owner name, or, for a device, a device number other
-    /// than 0, which the readers read from some such headers and not from
-    /// others.
+    /// Whether a header holds an owner name, or a device's number other than
+    /// 0, where its magic and version are neither POSIX's nor GNU's exactly. The readers read those fields from some such headers and not
+    /// from others.
     pub(crate) unknown_magic: bool,
     /// Whether the magic and version are exactly POSIX's, `ustar\0` and
     /// `00`, or GNU's, `ustar ` and ` \0`.
@@ -140,7 +139,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     }
 
     // A mode and an id are unsigned. The base-256 form is two's complement
-    // and can carry a negative value, which a cast would wrap into a
+    // and can hold a negative value, which a cast would wrap into a
     // plausible permission set, setuid and setgid included, or an unrelated
     // id, so a negative one is refused. Nothing is lost by refusing: an
     // archive that means mode 0o7777 or uid 4294967295 spells it directly.
@@ -177,7 +176,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
         Magic::V7 => (Vec::new(), Vec::new(), None),
     };
 
-    // The readers agree on which headers carry owner names and device numbers
+    // The readers agree on which headers hold owner names and device numbers
     // only for POSIX's magic, with any version, and GNU's magic and version
     // exactly. With any other pair, each reader decides for itself: GNU tar
     // and Go read GNU's magic with another version as v7, where bsdtar and
@@ -218,7 +217,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
 /// block, the checksum field read as spaces.
 ///
 /// The unsigned sum is the format's. The signed sum is accepted as well, as
-/// GNU tar documents for archives from historical writers, and as every reader
+/// GNU tar documents for archives from historical writers. Every reader
 /// ferrotape is measured against accepts it.
 fn checksum_matches(block: &[u8; BLOCK]) -> bool {
     let Ok(stored) = number(&block[CHECKSUM]) else {
@@ -239,8 +238,8 @@ fn checksum_matches(block: &[u8; BLOCK]) -> bool {
 /// A text field: the bytes up to the first NUL.
 ///
 /// A header's own text fields are NUL-padded, and a GNU long name or long
-/// link is a C string, so in either a NUL ends the text. GNU tar, bsdtar, Go
-/// and Python all read a long name holding one this way.
+/// link is a C string. In either, a NUL ends the text. The reference readers
+/// all read a long name holding one this way.
 pub(crate) fn text(field: &[u8]) -> &[u8] {
     field.split(|byte| *byte == 0).next().unwrap_or(field)
 }
@@ -264,7 +263,7 @@ fn unsigned(field: &[u8]) -> Result<u32, Numeric> {
 ///
 /// After a space that ends the digits, the field holds spaces alone up to its
 /// first NUL. GNU tar and bsdtar read digits followed by a space and more as
-/// the first digits; Go cannot read the field, and Python, which cannot
+/// the first digits. Go cannot read the field, and Python, which cannot
 /// either, ends the archive at its header.
 fn octal(field: &[u8]) -> Result<i64, Numeric> {
     let mut value: i64 = 0;
@@ -338,7 +337,7 @@ impl Text {
     }
 
     /// The most bytes the field holds. POSIX ends `uname` and `gname` with a
-    /// NUL; the name, link name and prefix may fill their fields.
+    /// NUL. The name, link name and prefix may fill their fields.
     pub(crate) fn capacity(self) -> usize {
         let range = self.range();
         let length = range.end.saturating_sub(range.start);
@@ -381,8 +380,8 @@ impl Number {
     }
 
     /// The largest value the field holds in octal digits that fill it, with
-    /// no NUL: the form bsdtar writes a device number in where seven digits
-    /// do not hold it, and every reader reads.
+    /// no NUL. bsdtar writes a device number in that form where seven digits
+    /// do not hold it, and every reader reads it.
     pub(crate) fn filling_max(self) -> u64 {
         largest_in(self.width())
     }
@@ -431,9 +430,9 @@ impl Draft {
         draft
     }
 
-    /// Sets `field` to `text`, NUL-padded. Whether `text` fits is the
-    /// caller's to check ([`Text::capacity`]); where it does not, the field
-    /// is left as it was and `false` returned.
+    /// Sets `field` to `text`, NUL-padded. The caller checks that `text` fits
+    /// ([`Text::capacity`]). Where it does not, the field is left as it was
+    /// and `false` returned.
     pub(crate) fn text(&mut self, field: Text, text: &[u8]) -> bool {
         if text.len() > field.capacity() {
             return false;
@@ -486,7 +485,7 @@ impl Draft {
 
     /// Sets `field` to `value` in GNU's base-256 form: big-endian two's
     /// complement, the first byte's high bit marking the form and the next
-    /// carrying the sign. Where the field's bits cannot hold `value`, the
+    /// holding the sign. Where the field's bits cannot hold `value`, the
     /// field is left as it was and `false` returned.
     pub(crate) fn base256(&mut self, field: Number, value: i128) -> bool {
         let Some(slot) = self.block.get_mut(field.range()) else {
@@ -502,7 +501,7 @@ impl Draft {
             return false;
         };
         // What the field cannot hold must be the sign extended, and the bit
-        // under the marker must still carry the sign.
+        // under the marker must still hold the sign.
         let fits = high.iter().all(|byte| *byte == sign)
             && low.first().is_some_and(|first| first & 0xc0 == sign & 0xc0);
         if !fits {
@@ -515,9 +514,9 @@ impl Draft {
         true
     }
 
-    /// The block, its checksum computed: the unsigned sum of every byte with
-    /// the checksum field read as spaces, as six octal digits, a NUL and a
-    /// space.
+    /// The block, its checksum computed. The checksum is the unsigned sum of
+    /// every byte, the checksum field read as spaces. It is written as six
+    /// octal digits, a NUL and a space.
     pub(crate) fn seal(mut self) -> [u8; BLOCK] {
         self.block[CHECKSUM].fill(b' ');
         // At most 512 * 255, which six octal digits hold.

@@ -1,19 +1,24 @@
-//! Sparse members: the map of where a file's data lies, read from each of
-//! GNU's four forms, and the rules a map keeps to be read.
+//! Sparse members: the map of where a file's data lies, read from GNU's four
+//! forms, and the rules a map keeps to be read.
 //!
 //! A sparse member stores only the parts of a file that hold data, its
-//! regions, and a map that places them: each region's offset in the file and
-//! its length, and the file's real size. What the map does not cover is a
-//! hole, read as zeros. GNU tar writes the map in four forms: in an old GNU
-//! header (typeflag `S`) and the extension blocks after it, or in pax records
-//! as format 0.0 (`GNU.sparse.offset` and `GNU.sparse.numbytes` in pairs),
-//! 0.1 (`GNU.sparse.map`), or 1.0 (the map at the start of the member's data,
-//! after records naming the version). bsdtar writes 1.0.
+//! regions, and a map that places them. The map gives each region's offset in
+//! the file and its length, and the file's real size. A part the map does not
+//! cover is a hole, read as zeros. GNU tar writes the map in four forms:
+//!
+//! - In an old GNU header (typeflag `S`) and the extension blocks after it
+//! - Format 0.0, in pax records (`GNU.sparse.offset` and
+//!   `GNU.sparse.numbytes` in pairs)
+//! - Format 0.1, in a pax record (`GNU.sparse.map`)
+//! - Format 1.0, at the start of the member's data, after pax records naming
+//!   the version
+//!
+//! bsdtar writes 1.0.
 //!
 //! The reference readers extract a map alike only in the shapes GNU tar and
-//! bsdtar write, and part ways over nearly every other: which region comes
+//! bsdtar write. They part ways over nearly every other: which region comes
 //! first, whether two may touch, where the file ends, what a number may hold.
-//! So a map is read only in those shapes, and every other is refused
+//! A map is therefore read only in those shapes, and every other is refused
 //! ([`SparseFlaw`]). The catalog's `sparse/` cases hold the reference
 //! readers' readings each rule rests on, and the tests hold the API to them.
 
@@ -26,7 +31,7 @@ use crate::pax::PaxRecords;
 /// The prefix of the keywords that describe a pax sparse member.
 pub(crate) const PREFIX: &[u8] = b"GNU.sparse.";
 
-/// The most decimal digits a number in a format 1.0 map may have: GNU tar
+/// The most decimal digits a number in a format 1.0 map may have. GNU tar
 /// fails on one longer, leading zeros included, where the others read it.
 const MAP_DIGITS: usize = 19;
 
@@ -54,7 +59,7 @@ const FIELD: usize = 12;
 /// regions' bytes alone, in order: [`stored_size`](Self::stored_size) bytes.
 ///
 /// A sparse member is the one member whose data can be longer than the
-/// archive holding it: a map can describe a file of up to 2^60 - 1 bytes
+/// archive holding it. A map can describe a file of up to 2^60 - 1 bytes
 /// stored in a few blocks. Its size is known before any of it is read
 /// ([`Entry::size`](crate::Entry::size)).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -67,7 +72,7 @@ pub struct Sparse {
 
 impl Sparse {
     /// The regions, in the order of their offsets: each begins at or after
-    /// the end of the one before it. A region may be empty, as the one GNU
+    /// the end of the one before it. A region can be empty, as the one GNU
     /// tar writes at the real size to end the map.
     #[must_use]
     pub fn regions(&self) -> &[Region] {
@@ -272,13 +277,17 @@ pub(crate) struct PaxSparse {
 /// The sparse records among `records`, read as one of GNU's three pax
 /// forms, or `None` where there are none.
 ///
-/// Each form's records, and those alone: 0.0 `size`, `numblocks`, and
-/// `offset` and `numbytes` in pairs; 0.1 `size`, `numblocks` and `map`; 1.0
-/// `major` `1`, `minor` `0` and `realsize`; and `name` in any. A record of
-/// another form, a version other than 1.0, or a required record missing is
-/// refused: the readers that read such a member read different files. `name`
-/// and `realsize` may be repeated, the last taken, as every reader takes it;
-/// any other record once.
+/// Each form's records, and those alone:
+///
+/// - 0.0: `size`, `numblocks`, and `offset` and `numbytes` in pairs
+/// - 0.1: `size`, `numblocks` and `map`
+/// - 1.0: `major` `1`, `minor` `0` and `realsize`
+/// - Any form: `name`
+///
+/// A record of another form, a version other than 1.0, or a required record
+/// missing is refused. The readers that read such a member read different
+/// files. `name` and `realsize` may be repeated, the last taken, as every
+/// reader takes it. Any other record is given once.
 pub(crate) fn pax(records: &PaxRecords) -> Result<Option<PaxSparse>, SparseFlaw> {
     let mut seen = Seen::default();
     let mut pairs: Vec<u64> = Vec::new();
@@ -378,7 +387,7 @@ fn once<'a>(slot: &mut Option<&'a [u8]>, value: &'a [u8]) -> Result<(), SparseFl
     Ok(())
 }
 
-/// Numbers in pairs, offset then length, as regions; refused where one is
+/// Numbers in pairs, offset then length, as regions. Refused where one is
 /// left over.
 fn regions_of(numbers: &[u64]) -> Result<Vec<Region>, SparseFlaw> {
     let (pairs, rest) = numbers.as_chunks::<2>();
@@ -407,9 +416,9 @@ fn decimal(text: &[u8]) -> Result<u64, SparseFlaw> {
 }
 
 /// A format 1.0 map, read a block at a time from the start of the member's
-/// data: a count, then that many offsets and lengths, each a run of decimal
-/// digits ended by a newline. What follows the last number in its block is
-/// not read, as no reader reads it.
+/// data. It is a count, then that many offsets and lengths, each a run of
+/// decimal digits ended by a newline. Bytes after the last number in its
+/// block are not read, as no reader reads them.
 #[derive(Debug, Default)]
 pub(crate) struct MapReader {
     count: Option<u64>,

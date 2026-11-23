@@ -1,6 +1,6 @@
-//! Writing a member's header: the fields a caller states, encoded as a POSIX
-//! ustar header block, preceded by a pax extended header for whatever the
-//! block cannot hold.
+//! Writing a member's header. The fields a caller states are encoded as a
+//! POSIX ustar header block, preceded by a pax extended header for whatever
+//! the block cannot hold.
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -17,17 +17,17 @@ use crate::settings::Limits;
 ///
 /// Each constructor makes one kind of member, with the fields that kind has:
 /// a file its size, a link its target, a device its numbers. The rest start
-/// empty or zero (owner root, modification time the epoch), with a mode of
-/// `0o644`, `0o755` for a directory or `0o777` for a symbolic link, and each
+/// empty or zero (owner root, modification time the epoch). The mode starts as
+/// `0o644`, `0o755` for a directory or `0o777` for a symbolic link. Each field
 /// is set with its own method. Paths, link targets and owner names are bytes,
-/// written as given; whether a path is acceptable is the caller's to decide.
+/// written as given. The caller decides whether a path is acceptable.
 ///
 /// [`encode`](Self::encode) writes the header as a POSIX ustar block. A field
 /// the block cannot hold exactly (a long path, a large size or id, a time
 /// before 1970 or finer than a second, an access or change time, an extended
-/// attribute) goes into a pax extended header written before it, which every
-/// reader of the pax format applies; the block then holds a placeholder for
-/// readers that do not. [`Writer`](crate::Writer) writes headers with their
+/// attribute) goes into a pax extended header written before it. Every reader
+/// of the pax format applies that header. The block then holds a placeholder
+/// for readers that do not. [`Writer`](crate::Writer) writes headers with their
 /// members' data.
 ///
 /// ```
@@ -92,7 +92,7 @@ impl Header {
     }
 
     /// A directory at `path`. Writers conventionally end a directory's path
-    /// with `/`; the path is written as given.
+    /// with `/`. The path is written as given.
     #[must_use]
     pub fn directory(path: impl Into<Vec<u8>>) -> Header {
         Header::new(EntryKind::Directory, path.into(), 0o755)
@@ -108,7 +108,7 @@ impl Header {
     }
 
     /// A hard link at `path` to `target`, the path of an earlier member of
-    /// the archive. It carries no data: the data is the earlier member's.
+    /// the archive. It has no data: the data is the earlier member's.
     #[must_use]
     pub fn hard_link(path: impl Into<Vec<u8>>, target: impl Into<Vec<u8>>) -> Header {
         Header {
@@ -174,14 +174,14 @@ impl Header {
         self
     }
 
-    /// Sets the access time, which a pax `atime` record carries.
+    /// Sets the access time, which a pax `atime` record states.
     pub fn set_atime(&mut self, atime: Timestamp) -> &mut Header {
         self.atime = Some(atime);
         self
     }
 
     /// Sets the time of the last change to the member's metadata, which a
-    /// pax `ctime` record carries.
+    /// pax `ctime` record states.
     pub fn set_ctime(&mut self, ctime: Timestamp) -> &mut Header {
         self.ctime = Some(ctime);
         self
@@ -206,12 +206,12 @@ impl Header {
     /// header's fields need: a `SCHILY.acl.access` list, a `comment`, a
     /// vendor's keyword.
     ///
-    /// A keyword the writer derives from the header's fields, or one the
-    /// readers apply to the member in ways that differ, is refused when the
-    /// header is encoded ([`HeaderError::ReservedKeyword`]), as is a default
-    /// access control list on a member that is not a directory
-    /// ([`HeaderError::DefaultAclWithoutDirectory`]). What a reader makes of
-    /// any other record is that reader's.
+    /// A keyword the writer derives from the header's fields is refused when
+    /// the header is encoded ([`HeaderError::ReservedKeyword`]). A keyword the
+    /// readers apply to the member in ways that differ is refused alike. A
+    /// default access control list on a member that is not a directory is
+    /// refused too ([`HeaderError::DefaultAclWithoutDirectory`]). Each reader
+    /// decides what it makes of any other record.
     pub fn add_record(
         &mut self,
         keyword: impl Into<Vec<u8>>,
@@ -225,14 +225,14 @@ impl Header {
     /// fields need one, then the ustar header block. A whole number of
     /// 512-byte blocks.
     ///
-    /// Every header encoded is read by this crate's reader at
+    /// This crate's reader reads every header encoded as the member it
+    /// describes, every field as set. It does so at
     /// [`Level::Compatible`](crate::Level::Compatible), in every
-    /// [`GlobalHeaders`](crate::GlobalHeaders) mode, as the member it
-    /// describes, every field as set, and at
-    /// [`Level::Strict`](crate::Level::Strict) as well but for one kind of
-    /// member: one whose mode has setuid, setgid or sticky beside an access
-    /// control list (a `SCHILY.acl.access` record), which is written as GNU
-    /// tar writes it and which Strict refuses
+    /// [`GlobalHeaders`](crate::GlobalHeaders) mode. At
+    /// [`Level::Strict`](crate::Level::Strict) it reads them as well, but for
+    /// a member whose mode has setuid, setgid or sticky beside an access
+    /// control list (a `SCHILY.acl.access` record). Such a member is written
+    /// as GNU tar writes it, and Strict refuses it
     /// ([`ErrorKind::SpecialBitsWithAcl`](crate::ErrorKind::SpecialBitsWithAcl)).
     /// A caller that reads its own archives at Strict drops the bits or the
     /// list.
@@ -240,8 +240,8 @@ impl Header {
     /// # Errors
     ///
     /// A [`HeaderError`] where a field cannot be written so that it reads
-    /// back as set: an empty path, a NUL in a name, a mode beyond the
-    /// permission bits, and the others that type lists.
+    /// back as set. [`HeaderError`] lists each case, such as an empty path, a
+    /// NUL in a name, or a mode beyond the permission bits.
     pub fn encode(&self) -> Result<Vec<u8>, HeaderError> {
         self.check()?;
         let directory = self.kind == EntryKind::Directory;
@@ -509,9 +509,9 @@ impl Extended {
     }
 
     /// The records, `hdrcharset=BINARY` first where a text value is not
-    /// UTF-8: bsdtar fails on such a value without it and reads it with it,
-    /// Python takes it as bytes either way, and GNU tar and Go read the bytes
-    /// as they are, GNU tar warning that it does not know the keyword.
+    /// UTF-8. bsdtar fails on such a value without it, and reads it with it.
+    /// Python takes it as bytes either way. GNU tar and Go read the bytes as
+    /// they are, GNU tar warning that it does not know the keyword.
     fn finish(self) -> Result<Vec<u8>, HeaderError> {
         if !self.binary {
             return Ok(self.records);
@@ -539,11 +539,12 @@ fn typeflag(kind: EntryKind) -> u8 {
     }
 }
 
-/// `path` as the block's prefix and name, where it fits: in the name alone,
-/// or split at a `/` into a prefix and a name, neither empty, which a reader
-/// joins with that `/`. The prefix never ends in `/`: bsdtar joins such a
-/// prefix to the name without adding one, reading `a//b` as `a/b`, where the
-/// other readers keep both; a name that begins with `/` is read alike.
+/// `path` as the block's prefix and name, where it fits. It goes in the name
+/// alone, or is split at a `/` into a prefix and a name, neither empty. A
+/// reader joins the two with that `/`. The prefix never ends in `/`. bsdtar joins
+/// such a prefix to the name without adding one, reading `a//b` as `a/b`,
+/// where the other readers keep both. A name that begins with `/` is read
+/// alike.
 fn ustar_split(path: &[u8]) -> Option<(&[u8], &[u8])> {
     if path.len() <= Text::Name.capacity() {
         return Some((&[], path));
@@ -565,15 +566,16 @@ fn ustar_split(path: &[u8]) -> Option<(&[u8], &[u8])> {
         })
 }
 
-/// The block's prefix and name for a `path` a pax `path` record carries.
+/// The block's prefix and name for a `path` that a pax `path` record states.
 ///
 /// As bsdtar's placeholder does, it keeps the path's leading components in
-/// the prefix and its last in the name, so a reader without the record puts
-/// the member in a directory it belongs under: the last component, cut to
-/// fit, ending in `/` where a directory's path does; as many leading
-/// components as fit in the prefix. Unlike the first 100 bytes, which GNU tar,
-/// Go and Python write, the name never ends in `/` but a directory's, which a
-/// reader without the record would extract as a directory.
+/// the prefix and its last in the name. A reader without the record then puts
+/// the member in a directory it belongs under. The name is the last
+/// component, cut to fit, ending in `/` where a directory's path does. The
+/// prefix is as many leading components as fit. GNU tar, Go and Python write
+/// the path's first 100 bytes instead. Unlike those, the name never ends in
+/// `/` but a directory's, which a reader without the record would extract as
+/// a directory.
 fn placeholder(path: &[u8], directory: bool) -> (&[u8], Vec<u8>) {
     let slash = directory && path.ends_with(b"/");
     let trimmed = trim_slashes(path);
@@ -602,7 +604,7 @@ fn placeholder(path: &[u8], directory: bool) -> (&[u8], Vec<u8>) {
 /// `path`.
 ///
 /// `PaxHeader/` and the member's last component, in the placeholder's
-/// prefix, as bsdtar names it: a reader that does not know typeflag `x`
+/// prefix, as bsdtar names it. A reader that does not know typeflag `x`
 /// extracts it as a file beside the member rather than over it.
 fn pax_header_name(path: &[u8], directory: bool) -> (&[u8], Vec<u8>) {
     let (prefix, name) = placeholder(path, directory);
@@ -623,7 +625,7 @@ fn trim_slashes(path: &[u8]) -> &[u8] {
 }
 
 /// The longest run of `dir`'s leading components, `/`s between them, of at
-/// most `room` bytes, without a `/` at its end, which bsdtar would not
+/// most `room` bytes. It has no `/` at its end, which bsdtar would not
 /// separate from the name.
 fn leading_components(dir: &[u8], room: usize) -> &[u8] {
     if dir.len() <= room {
@@ -638,8 +640,8 @@ fn leading_components(dir: &[u8], room: usize) -> &[u8] {
 }
 
 /// A pax time: seconds since the epoch, and the fraction of a second where
-/// there is one, with as few digits as hold it exactly, as GNU tar, bsdtar
-/// and Go write it. A time before 1970 with a fraction is refused before this
+/// there is one. The fraction has as few digits as hold it exactly, as GNU
+/// tar, bsdtar and Go write it. A time before 1970 with a fraction is refused before this
 /// ([`HeaderError::FractionBeforeEpoch`]).
 fn pax_time(time: Timestamp) -> String {
     let (secs, nanos) = (time.secs(), time.nanos());
@@ -650,17 +652,17 @@ fn pax_time(time: Timestamp) -> String {
     alloc::format!("{secs}.{}", digits.trim_end_matches('0'))
 }
 
-/// Whether `keyword` can be written as a record's keyword: not empty, and
-/// holding no `=`, which ends a keyword, and no NUL, which ends one for GNU tar
-/// and bsdtar and which Go refuses. A record's length frames it, so a newline
+/// Whether `keyword` can be written as a record's keyword. It is not empty,
+/// and holds no `=`, which ends a keyword. It holds no NUL either, which ends
+/// one for GNU tar and bsdtar and which Go refuses. A record's length frames it, so a newline
 /// is read alike by every reader.
 fn writable_keyword(keyword: &[u8]) -> bool {
     !keyword.is_empty() && !keyword.iter().any(|byte| matches!(byte, b'=' | 0))
 }
 
-/// Whether `keyword` is one a caller's record may not use: one the writer
-/// derives from the header's fields, or one the readers apply to a member in
-/// ways that differ.
+/// Whether `keyword` is one a caller's record may not use. The writer derives
+/// such a keyword from the header's fields, or the readers apply it to a
+/// member in ways that differ.
 fn reserved(keyword: &[u8]) -> bool {
     const FIELDS: [&[u8]; 13] = [
         b"path",
@@ -740,10 +742,9 @@ pub enum HeaderError {
     Mode(u32),
     /// The size is 2^60 or more, past which bsdtar stops at the member.
     SizeOutOfRange(u64),
-    /// A time before 1970 with a fraction of a second. bsdtar reads a pax
-    /// time's fraction forward from the second its digits name, so it reads
-    /// `-1.5` as half a second before the epoch, where GNU tar, Go and Python
-    /// read a second and a half.
+    /// A time before 1970 with a fraction of a second, which bsdtar reads
+    /// otherwise than the other readers
+    /// ([`ErrorKind::FractionBeforeEpoch`](crate::ErrorKind::FractionBeforeEpoch)).
     FractionBeforeEpoch(Keyword),
     /// A device number is larger than eight octal digits hold (16,777,215).
     /// GNU tar fails on a larger one in GNU's base-256 form, and only bsdtar
@@ -755,15 +756,15 @@ pub enum HeaderError {
         minor: u32,
     },
     /// An extended attribute's name cannot be written so that every reader
-    /// reads it back alike: it is empty, or holds `=`, a NUL, or `%3D` or
+    /// reads it back alike. It is empty, or holds `=`, a NUL, or `%3D` or
     /// `%25`, which GNU tar decodes and bsdtar and Go do not.
     XattrName {
         /// The name.
         name: Vec<u8>,
     },
-    /// An extended attribute's value is empty. GNU tar and bsdtar set an
-    /// empty attribute; Go reads an empty value as the record's deletion, as
-    /// POSIX specifies for a pax record, and reports none.
+    /// An extended attribute's value is empty, which Go reads otherwise than
+    /// GNU tar and bsdtar
+    /// ([`ErrorKind::EmptyXattr`](crate::ErrorKind::EmptyXattr)).
     EmptyXattr {
         /// The attribute's name.
         name: Vec<u8>,
@@ -779,11 +780,11 @@ pub enum HeaderError {
         /// The keyword.
         keyword: Vec<u8>,
     },
-    /// A record's keyword is one the writer derives from the header's fields
-    /// (`path`, `size`, `mtime` and the like, and `SCHILY.xattr.` records,
-    /// which [`Header::add_xattr`] writes), or one the readers apply to the
-    /// member in ways that differ (`SCHILY.devmajor`, `SCHILY.devminor`,
-    /// `LIBARCHIVE.xattr.`, `RHT.`, `GNU.`).
+    /// A record's keyword is reserved. The writer derives it from the
+    /// header's fields (`path`, `size`, `mtime` and the like, and
+    /// `SCHILY.xattr.` records, which [`Header::add_xattr`] writes), or the
+    /// readers apply it to the member in ways that differ (`SCHILY.devmajor`,
+    /// `SCHILY.devminor`, `LIBARCHIVE.xattr.`, `RHT.`, `GNU.`).
     ReservedKeyword {
         /// The keyword.
         keyword: Vec<u8>,

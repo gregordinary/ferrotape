@@ -1,5 +1,5 @@
 //! Pax extended headers: records framed by their length, the records a member
-//! carries, and the keywords the reader applies to it.
+//! has, and the keywords the reader applies to it.
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -26,13 +26,13 @@ const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 /// The prefix of the keywords that describe a pax sparse member.
 const SPARSE: &[u8] = crate::sparse::PREFIX;
 
-/// The records of a pax extended header, in the order the archive holds them:
-/// the one (typeflag `x`) that preceded a member, or a global one (typeflag
-/// `g`).
+/// The records of a pax extended header, in the order the archive holds them.
+/// The header is the one (typeflag `x`) that preceded a member, or a global one
+/// (typeflag `g`).
 ///
 /// The reader has already applied the records of a member's own header that
 /// it reads as the member's fields (`path`, `linkpath`, `size`, `uid`, `gid`,
-/// `uname`, `gname`, `mtime`, `atime` and `ctime`); each is here as well, as
+/// `uname`, `gname`, `mtime`, `atime` and `ctime`). Each is here as well, as
 /// the archive spells it. Every other record, a vendor's included, is here
 /// and nowhere else.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -66,9 +66,9 @@ impl PaxRecords {
     }
 
     /// Whether the `SCHILY.devmajor` and `SCHILY.devminor` records agree with
-    /// a device's header numbers, `major` and `minor`: where either record
-    /// is present, bsdtar takes the device's numbers from the two, a missing
-    /// one as 0, and GNU tar, Go and Python from the header. A record that is
+    /// a device's header numbers, `major` and `minor`. Where either record is
+    /// present, bsdtar takes the device's numbers from the two, a missing one
+    /// as 0. GNU tar, Go and Python take them from the header. A record that is
     /// not decimal digits agrees with nothing.
     pub(crate) fn device_records_agree(&self, (major, minor): (u32, u32)) -> bool {
         let (major_record, minor_record) =
@@ -86,11 +86,11 @@ impl PaxRecords {
     /// An attribute is a `SCHILY.xattr.` record, the attribute's name
     /// following the prefix as the archive spells it. GNU tar, bsdtar and Go
     /// read these records, and bsdtar also writes and applies a
-    /// `LIBARCHIVE.xattr.` record for each attribute. Where a member's records
-    /// would be extracted as different attributes by different readers, the
-    /// reader refuses the member ([`ErrorKind::XattrName`],
-    /// [`ErrorKind::XattrConflict`]), so every `LIBARCHIVE.xattr.` record of a
-    /// member read repeats an attribute listed here.
+    /// `LIBARCHIVE.xattr.` record for each attribute. The reader refuses a
+    /// member whose records different readers would extract as different
+    /// attributes ([`ErrorKind::XattrName`], [`ErrorKind::XattrConflict`]).
+    /// Every `LIBARCHIVE.xattr.` record of a member read therefore repeats an
+    /// attribute listed here.
     ///
     /// A global header's records are not held to that rule, and their
     /// attributes are listed as spelled.
@@ -112,24 +112,24 @@ impl PaxRecords {
 
     /// The member's access control list, in each form the records hold it.
     ///
-    /// An archive records a POSIX ACL in two forms: the kernel's binary value,
-    /// as the extended attribute `system.posix_acl_access`, and `getfacl`'s
-    /// text, as a `SCHILY.acl.access` record. Readers apply different ones, so
-    /// an archive whose two forms state different lists is extracted with
-    /// different permissions by each. Both are delivered together, as the
-    /// archive holds them; parsing them, and deciding what a disagreement
-    /// means, is the caller's.
+    /// An archive records a POSIX access control list in two forms. One is
+    /// the kernel's binary value, as the extended attribute
+    /// `system.posix_acl_access`. The other is `getfacl`'s text, as a
+    /// `SCHILY.acl.access` record. Readers apply different ones, so an archive
+    /// whose two forms state different lists is extracted with different
+    /// permissions by each. Both are delivered together, as the archive holds
+    /// them. The caller parses them, and decides what a disagreement means.
     ///
     /// The list also states the permissions the header's mode does, and the
-    /// two can differ. Where the list has a mask, the mode's group bits are
-    /// the mask's as GNU tar writes the mode, and the owning group's as
-    /// bsdtar writes it. GNU tar extracts the header's mode beside the list;
-    /// bsdtar takes the whole mode from the list's text, the group bits from
-    /// the owning group's entry, and drops setuid, setgid and sticky, which
+    /// two can differ. Where the list has a mask, GNU tar writes the mask in
+    /// the mode's group bits, and bsdtar writes the owning group's entry. GNU
+    /// tar extracts the header's mode beside the list. bsdtar takes the whole
+    /// mode from the list's text, the group bits from the owning group's
+    /// entry. It drops setuid, setgid and sticky, which
     /// [`Level::Strict`](crate::Level::Strict) refuses beside a list
     /// ([`ErrorKind::SpecialBitsWithAcl`]). [`Entry::mode`](crate::Entry::mode)
-    /// is the header's, as the archive holds it; checking it against the
-    /// list is the caller's, with the list's own rules.
+    /// is the header's, as the archive holds it, and the caller checks it
+    /// against the list by the list's own rules.
     #[must_use]
     pub fn access_acl(&self) -> AclRecords<'_> {
         AclRecords {
@@ -155,8 +155,8 @@ impl PaxRecords {
 
 /// One access control list, in the forms an archive's records hold it.
 ///
-/// Either form may be present without the other, and an empty text form is a
-/// form: GNU tar writes an empty `SCHILY.acl.default` for a directory with no
+/// Either form can be present without the other, and an empty text form is a
+/// form. GNU tar writes an empty `SCHILY.acl.default` for a directory with no
 /// default list.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -400,7 +400,7 @@ fn framed(data: &[u8]) -> impl Iterator<Item = Result<Record<'_>, ErrorKind>> {
 ///
 /// POSIX gives the last record precedence and the reader takes it, but one
 /// reader in wide use takes the first ([`ErrorKind::RepeatedKeyword`]). Any
-/// keyword counts, a vendor's included: the records reach the caller, who may
+/// keyword counts, a vendor's included: the records reach the caller, who can
 /// read either. The records are sorted rather than compared pairwise, so the
 /// time taken grows with the header's length and not its square.
 fn check_repeats(data: &[u8]) -> Result<(), ErrorKind> {
@@ -426,18 +426,19 @@ fn check_repeats(data: &[u8]) -> Result<(), ErrorKind> {
 /// the readers extract as different attributes.
 ///
 /// GNU tar reads a `SCHILY.xattr.` name with `%3D` and `%25` undone, where
-/// bsdtar and Go read it as spelled, and no reader extracts an attribute with
-/// an empty name, which Go reports ([`ErrorKind::XattrName`]). Go reads an
-/// empty value as the record's deletion, where GNU tar and bsdtar set an
-/// empty attribute ([`ErrorKind::EmptyXattr`]). bsdtar also
-/// applies `LIBARCHIVE.xattr.` records, which GNU tar and Go do not, so each
-/// must repeat a `SCHILY.xattr.` record: the same name, holding no `%` for
-/// bsdtar to decode, and the last such record's value in base64
-/// ([`ErrorKind::XattrConflict`]). Since the last value holds for GNU tar, and
-/// every record of the name holds it for bsdtar, the two readers agree
-/// whatever the order. The `SCHILY.xattr.` records are sorted rather than
-/// searched once for each, so the time taken grows with the header's length
-/// and not its square.
+/// bsdtar and Go read it as spelled. No reader extracts an attribute with an
+/// empty name, which Go reports ([`ErrorKind::XattrName`]). Go reads an empty
+/// value as the record's deletion, where GNU tar and bsdtar set an empty
+/// attribute ([`ErrorKind::EmptyXattr`]). bsdtar also applies
+/// `LIBARCHIVE.xattr.` records, which GNU tar and Go do not. Each must repeat
+/// a `SCHILY.xattr.` record: the same name, holding no `%` for bsdtar to
+/// decode, and the last such record's value in base64
+/// ([`ErrorKind::XattrConflict`]).
+///
+/// GNU tar keeps the last value, and bsdtar applies every record of the name
+/// in turn, so the two readers agree whatever the order. The `SCHILY.xattr.`
+/// records are sorted rather than searched once for each, so the time taken
+/// grows with the header's length and not its square.
 fn check_xattrs(data: &[u8]) -> Result<(), ErrorKind> {
     let mut libarchive = false;
     for (keyword, value) in (Records { rest: data }) {
@@ -493,18 +494,18 @@ fn check_xattrs(data: &[u8]) -> Result<(), ErrorKind> {
 ///
 /// The record is a second spelling of the attribute `security.selinux`. GNU
 /// tar applies it only with `--selinux`, after any `SCHILY.xattr.` record of
-/// the attribute, with a NUL appended; bsdtar applies every record of the
-/// attribute in the archive's order, as it holds it; Go reports only the
+/// the attribute, with a NUL appended. bsdtar applies every record of the
+/// attribute in the archive's order, as it holds it. Go reports only the
 /// `SCHILY.xattr.` record. They agree on GNU tar's own form, which every
 /// `RHT.security.selinux` record beside another record of the attribute must
-/// take: a later `SCHILY.xattr.` record of the attribute, the last, holding
-/// the same context followed by one NUL.
+/// take. In that form a later `SCHILY.xattr.` record of the attribute, the
+/// last, holds the same context followed by one NUL.
 ///
 /// A record alone, as GNU tar's `--selinux` writes one on every member of a
-/// labelled system, is read: GNU tar with `--selinux` and bsdtar apply its
-/// context, which the kernel stores with one NUL whichever spelling it is
-/// given where SELinux is enforcing, and no reader applies another label. It
-/// must be given once, hold a context, and hold no NUL.
+/// labeled system, is read. GNU tar with `--selinux` and bsdtar apply its
+/// context, and no reader applies another label. Where SELinux is enforcing,
+/// the kernel stores the context with one NUL, whichever spelling it is
+/// given. The record must be given once, hold a context, and hold no NUL.
 fn check_selinux(data: &[u8]) -> Result<(), ErrorKind> {
     const RHT: &[u8] = b"RHT.security.selinux";
     const SCHILY: &[u8] = b"SCHILY.xattr.security.selinux";
@@ -541,9 +542,9 @@ fn check_selinux(data: &[u8]) -> Result<(), ErrorKind> {
 /// Refuses a `hdrcharset` record, `data`'s records already framed, naming
 /// neither of POSIX's two character sets ([`ErrorKind::UnknownCharset`]).
 ///
-/// bsdtar reports another value as an error, and then reads a `path` ending
-/// in `/` over a regular file as a regular file, where GNU tar, which ignores
-/// the record, reads a directory.
+/// bsdtar reports another value as an error. It then reads a `path` ending in
+/// `/` over a regular file as a regular file. GNU tar, which ignores the
+/// record, reads a directory.
 fn check_charset(data: &[u8]) -> Result<(), ErrorKind> {
     for (keyword, value) in (Records { rest: data }) {
         if keyword == b"hdrcharset" && value != b"BINARY" && value != b"ISO-IR 10646 2000 UTF-8" {
@@ -609,7 +610,7 @@ fn apply(applied: &mut Applied, keyword: &[u8], value: &[u8]) -> Result<(), Erro
             applied.size = Some(size);
         }
         // GNU tar writes these where an id does not fit the header's octal
-        // field, so an archive of a tree with high ids carries its ownership
+        // field, so an archive of a tree with high ids holds its ownership
         // here and nowhere else.
         Keyword::Uid | Keyword::Gid => {
             let id = decimal(value)
@@ -663,11 +664,11 @@ fn name(keyword: Keyword, value: &[u8]) -> Result<Vec<u8>, ErrorKind> {
 }
 
 /// A pax time: seconds since the epoch, optionally negative, with an optional
-/// fraction, floored to the nanosecond.
+/// fraction, rounded down to the nanosecond.
 ///
-/// The second floors as GNU tar's does: `-1.5` is an instant between `-2` and
-/// `-1`, so the second holding it is `-2`, and the instant is half a second
-/// past it.
+/// The second is rounded down, as GNU tar rounds it. `-1.5` is an instant
+/// between `-2` and `-1`, so the second holding it is `-2`, and the instant
+/// is half a second past it.
 fn time(value: &[u8]) -> Result<Timestamp, Numeric> {
     const NANOS_PER_SEC: u32 = 1_000_000_000;
     let (whole, fraction) = split_once(value, b'.').unwrap_or((value, &[]));
@@ -723,9 +724,8 @@ fn time(value: &[u8]) -> Result<Timestamp, Numeric> {
 /// Whether a pax time, already read, is negative with a fraction that is not
 /// zero.
 ///
-/// bsdtar reads the fraction forward from the second the digits name: `-1.5`
-/// as half a second before the epoch, where GNU tar, Go and Python read a
-/// second and a half ([`ErrorKind::FractionBeforeEpoch`]).
+/// bsdtar reads the fraction otherwise than the other readers
+/// ([`ErrorKind::FractionBeforeEpoch`]).
 fn before_epoch_with_fraction(value: &[u8]) -> bool {
     value.starts_with(b"-")
         && split_once(value, b'.')
@@ -736,9 +736,9 @@ fn before_epoch_with_fraction(value: &[u8]) -> bool {
 /// else.
 ///
 /// An integer parser also takes a leading `+`, which no pax writer emits. A
-/// record's length decides where the next one begins and a `size` where the
-/// next header does, so a reader more lenient than the format reads an
-/// archive differently from the tools that wrote it.
+/// record's length decides where the next one begins, and a `size` decides
+/// where the next header does. A reader more lenient than the format
+/// therefore reads an archive differently from the tools that wrote it.
 fn decimal(text: &[u8]) -> Result<u64, Numeric> {
     if text.is_empty() || !text.iter().all(u8::is_ascii_digit) {
         return Err(Numeric::Unreadable);

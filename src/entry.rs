@@ -13,8 +13,8 @@ use crate::sparse::Sparse;
 /// applied.
 ///
 /// Paths, link targets and owner names are the archive's bytes: nothing is
-/// decoded or checked as a path. Whether an absolute path or a `..` component
-/// is acceptable is the caller's to decide.
+/// decoded or checked as a path. The caller decides whether an absolute path
+/// or a `..` component is acceptable.
 #[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Entry {
@@ -67,10 +67,17 @@ impl Entry {
         self.kind
     }
 
-    /// The typeflag, as the header holds it: `0` (or NUL, in a v7 header)
-    /// for a regular file, `1` a hard link, `2` a symbolic link, `3` a
-    /// character device, `4` a block device, `5` a directory, `6` a FIFO, or
-    /// another byte. [`kind`](Self::kind) says what the reader takes it for.
+    /// The typeflag, as the header holds it, which can be any byte.
+    /// [`kind`](Self::kind) says what the reader takes it for. The typeflags of
+    /// the common kinds are:
+    ///
+    /// - `0`, or NUL in a v7 header: a regular file
+    /// - `1`: a hard link
+    /// - `2`: a symbolic link
+    /// - `3`: a character device
+    /// - `4`: a block device
+    /// - `5`: a directory
+    /// - `6`: a FIFO
     #[must_use]
     pub fn typeflag(&self) -> u8 {
         self.typeflag
@@ -110,15 +117,15 @@ impl Entry {
 
     /// The length of the data the reader delivers for the member, in bytes.
     ///
-    /// The [declared size](Self::declared_size) for a member that carries
-    /// data, and zero for a hard link, a symbolic link, a device, a directory
-    /// or a FIFO, which carry none whatever their header declares. A GNU
-    /// dumpdir (typeflag `D`) is a directory that carries data: the names of
-    /// the files in it when it was archived.
+    /// The [declared size](Self::declared_size) for a member that has data.
+    /// Zero for a hard link, a symbolic link, a device, a directory or a
+    /// FIFO, which have none whatever their header declares. A GNU dumpdir
+    /// (typeflag `D`) is a directory that has data: the names of the files in
+    /// it when it was archived.
     ///
     /// For a [sparse](Self::sparse) member, the real size of the file it
-    /// stands for, which may be far larger than what the archive stores, up
-    /// to 2^60 - 1 bytes: a caller copying the data to a file checks this
+    /// stands for, up to 2^60 - 1 bytes. It can be far larger than what the
+    /// archive stores. A caller copying the data to a file checks this
     /// first, or writes the holes as holes ([`Reader::stored_data`]).
     ///
     /// [`Reader::stored_data`]: crate::Reader::stored_data
@@ -167,8 +174,8 @@ impl Entry {
 
     /// The member's own header block, as the archive holds it.
     ///
-    /// The metadata before it, long names and pax records, may have replaced
-    /// any of its fields; the block shows what it stated itself.
+    /// The metadata before it, long names and pax records, can have replaced
+    /// any of its fields. The block shows what it stated itself.
     #[must_use]
     pub fn header_block(&self) -> &[u8; BLOCK] {
         &self.header
@@ -182,9 +189,9 @@ impl Entry {
     }
 
     /// Where the member's data begins, in bytes from the start of the
-    /// stream: just past its header block, or for a sparse member, where its
-    /// stored data begins, past an old GNU header's extension blocks or a
-    /// format 1.0 map.
+    /// stream. It is just past its header block. For a sparse member, it is
+    /// where its stored data begins, past an old GNU header's extension blocks
+    /// or a format 1.0 map.
     #[must_use]
     pub fn data_offset(&self) -> u64 {
         self.data_offset
@@ -201,10 +208,10 @@ impl Entry {
     /// The map of a sparse member: where the data the archive stores lies
     /// in the file the member stands for. `None` for any other member.
     ///
-    /// A sparse member is a regular file ([`EntryKind::File`]): an old GNU
-    /// one has typeflag `S`, a pax one typeflag `0` and `GNU.sparse.`
-    /// records, which [`pax_records`](Self::pax_records) holds as the
-    /// archive spells them. Its path is the file's: for GNU's pax formats 0.1
+    /// A sparse member is a regular file ([`EntryKind::File`]). An old GNU
+    /// one has typeflag `S`. A pax one has typeflag `0` and `GNU.sparse.`
+    /// records, which [`pax_records`](Self::pax_records) holds as the archive
+    /// spells them. Its path is the file's: for GNU's pax formats 0.1
     /// and 1.0, the `GNU.sparse.name` record, where the header's own name is
     /// `GNUSparseFile.<n>/` and the name.
     #[must_use]
@@ -319,9 +326,10 @@ impl fmt::Display for EntryKind {
 
 /// An instant, as seconds and nanoseconds since the Unix epoch.
 ///
-/// A time before 1970 has negative seconds; the nanoseconds always count
+/// A time before 1970 has negative seconds. The nanoseconds always count
 /// forward from the second, so -1.5 seconds is -2 seconds and 500,000,000
-/// nanoseconds. A pax time more precise than a nanosecond is floored to one.
+/// nanoseconds. A pax time more precise than a nanosecond is rounded down to
+/// one.
 /// Timestamps order chronologically.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Timestamp {

@@ -1,10 +1,15 @@
 //! The reader's core, which performs no I/O: it is handed the archive's
 //! header blocks and metadata, and says what to read, skip or yield next.
 //!
-//! A driver runs it. It asks for a [`Step`] and acts on it: reads the next
-//! block, or a metadata member's data, and hands it over; skips the bytes it
-//! is told to; or delivers the member it is given and serves that member's
-//! data until it moves on. Every reading rule lives here, so each way of
+//! A driver runs it. It asks for a [`Step`] and acts on it in one of three
+//! ways:
+//!
+//! - It reads the next block, or a metadata member's data, and hands it over.
+//! - It skips the bytes it is told to.
+//! - It delivers the member it is given, and serves that member's data until
+//!   it moves on.
+//!
+//! Every reading rule lives here, so each way of
 //! moving bytes (a source read through, a source sought past) is a driver
 //! and nothing more.
 
@@ -21,10 +26,10 @@ use crate::sparse::{self, MapReader, PaxForm, Region};
 /// [`BLOCK`] as the type sizes and offsets are counted in.
 const BLOCK_LEN: u64 = BLOCK as u64;
 
-/// GNU's magic and version, which an old GNU sparse header carries.
+/// GNU's magic and version, which an old GNU sparse header holds.
 const GNU_MAGIC: &[u8] = b"ustar  \0";
 
-/// POSIX's magic and version, which a pax sparse member's header carries.
+/// POSIX's magic and version, which a pax sparse member's header holds.
 const POSIX_MAGIC: &[u8] = b"ustar\x0000";
 
 /// What the driver does next.
@@ -365,9 +370,9 @@ impl Parser {
         }))
     }
 
-    /// The archive's end at `at`, the archive ending just before `end`: a
-    /// zero block's offset and the offset past it, or where the stream ends
-    /// for both. Refused where metadata waits for a member it never gets.
+    /// The archive's end at `at`, the archive ending just before `end`. These
+    /// are a zero block's offset and the offset past it, or where the stream
+    /// ends for both. Refused where metadata waits for a member it never gets.
     fn ending(&mut self, at: u64, end: u64) -> Result<Step, Error> {
         if self.pending.waiting() {
             return Err(Error::new(at, ErrorKind::Truncated(Truncation::Member)));
@@ -381,9 +386,9 @@ impl Parser {
     }
 
     /// The member `header` describes, at `at`, with the metadata read before
-    /// it applied: a pax record over a GNU long name or long link, either
-    /// over the header's own field, and a global record where one applies
-    /// beneath the member's own.
+    /// it applied. A pax record takes precedence over a GNU long name or long
+    /// link, and either over the header's own field. A global record applies
+    /// beneath the member's own, where one applies.
     fn member(&mut self, at: u64, block: &[u8; BLOCK], header: Fields) -> Result<Step, Error> {
         let refuse = |kind| Error::new(at, kind);
         let flawed = |flaw| Error::new(at, ErrorKind::Sparse(flaw));
@@ -508,7 +513,7 @@ impl Parser {
         // A regular member is a directory by its trailing separator, and
         // bsdtar forgets that after any record it fails to parse: an access
         // list, a creation time, a symbolic link's type, a character set. So
-        // such a member carries only the records every reader reads alike.
+        // such a member has only the records every reader reads alike.
         if matches!(header.typeflag, b'0' | 0 | b'7') && kind == EntryKind::Directory {
             let other = records.iter().find(|(keyword, _)| {
                 Keyword::of(keyword).is_none()
@@ -527,7 +532,7 @@ impl Parser {
             return Err(refuse(ErrorKind::TargetWithoutLink { kind }));
         }
         // A default list is a directory's. bsdtar takes the mode of any other
-        // member carrying one from the lists' text, `000`, where GNU tar, Go
+        // member with one from the lists' text, `000`, where GNU tar, Go
         // and Python read the header's.
         if kind != EntryKind::Directory && records.get(b"SCHILY.acl.default").is_some() {
             return Err(refuse(ErrorKind::DefaultAclWithoutDirectory { kind }));
@@ -713,9 +718,9 @@ impl Parser {
     }
 }
 
-/// A sparse member, its map read: held to the rules every reference reader
-/// extracts alike, then delivered with the real size as its size and its
-/// stored data beginning at `data_offset`.
+/// A sparse member, its map read. The map is checked against the rules every
+/// reference reader extracts alike. The member is then delivered with the
+/// real size as its size, and its stored data beginning at `data_offset`.
 fn finish(
     mut entry: Entry,
     regions: Vec<Region>,
@@ -731,7 +736,7 @@ fn finish(
 }
 
 /// The name a member takes from a pax record, a GNU long name, and its own
-/// header, in that order, refused where the first two both state one and
+/// header, in that order. Refused where the first two both state one and
 /// differ ([`ErrorKind::LongNameConflict`]).
 fn resolve(
     pax: Option<Vec<u8>>,

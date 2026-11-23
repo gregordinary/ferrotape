@@ -15,7 +15,7 @@ const CHUNK: usize = 64 * 1024;
 /// the padding to the next block, then, on [`finish`](Self::finish), the end
 /// marker.
 ///
-/// What goes into the archive, and in what order, is the caller's. A member
+/// The caller decides what goes into the archive, and in what order. A member
 /// whose header cannot be encoded is refused before anything of it is
 /// written, and the archive can go on. A failure while a member is being
 /// written leaves the archive inside that member, so every later call fails
@@ -53,17 +53,19 @@ impl<W: Write> Writer<W> {
     /// Appends a member: its header, then `data`, read until the header's
     /// size has been read, then the padding to the next block.
     ///
-    /// A regular file's header states the size; every other kind of member
-    /// carries no data, and `data` is not read. Bytes past the size are not
-    /// read either, so `data` may go on to hold what follows.
+    /// A regular file's header states the size. Every other kind of member
+    /// has no data, and `data` is not read. Bytes past the size are not read
+    /// either, so `data` can go on to hold what follows.
     ///
     /// # Errors
     ///
-    /// [`WriteError::Header`] where the header cannot be encoded, before
-    /// anything is written; [`WriteError::Data`] where `data` fails or ends
-    /// before the size, and [`WriteError::Io`] where the destination fails,
-    /// each of which leaves the archive inside the member; and
-    /// [`WriteError::Broken`] after either.
+    /// - [`WriteError::Header`] where the header cannot be encoded, before
+    ///   anything is written
+    /// - [`WriteError::Data`] where `data` fails or ends before the size,
+    ///   leaving the archive inside the member
+    /// - [`WriteError::Io`] where the destination fails, leaving the archive
+    ///   inside the member
+    /// - [`WriteError::Broken`] after either of those two
     pub fn append(&mut self, header: &Header, mut data: impl Read) -> Result<(), WriteError> {
         if self.broken {
             return Err(WriteError::Broken);
@@ -131,8 +133,8 @@ impl<W: Write> Writer<W> {
     }
 
     /// Flushes the archive and returns the destination without the end
-    /// marker, for a caller that goes on writing to it: another archive's
-    /// members and that archive's end marker, for one.
+    /// marker, for a caller that goes on writing to it. Such a caller can
+    /// write another archive's members and that archive's end marker.
     ///
     /// # Errors
     ///
@@ -220,8 +222,8 @@ impl core::error::Error for WriteError {
 }
 
 impl From<WriteError> for io::Error {
-    /// The destination's or the data's own error as it was; any other as
-    /// [`io::ErrorKind::InvalidInput`], carrying the [`WriteError`].
+    /// The destination's or the data's own error as it was. Any other is an
+    /// error of kind [`io::ErrorKind::InvalidInput`] that carries it.
     fn from(err: WriteError) -> io::Error {
         match err {
             WriteError::Data(err) | WriteError::Io(err) => err,

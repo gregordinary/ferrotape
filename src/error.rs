@@ -10,15 +10,15 @@ use crate::entry::EntryKind;
 /// Why reading an archive failed, and where.
 ///
 /// [`kind`](Self::kind) names the rule the archive breaks, or says that the
-/// source beneath it failed; [`offset`](Self::offset) says where in the
+/// source beneath it failed. [`offset`](Self::offset) says where in the
 /// stream. For [`ErrorKind::Io`], [`source`](core::error::Error::source) is
 /// the source's own failure.
 ///
 /// An `Error` converts into an [`io::Error`] that carries it, which is what
 /// [`Data`](crate::Data) returns. A [`Reader`](crate::Reader) whose source
-/// fails with one returns the carried error as it was, so an archive read from
-/// another archive's member reports the outer archive's failure as that, and
-/// not as its own source failing.
+/// fails with one returns the error it carries, as it was. An archive read
+/// from another archive's member thus reports the outer archive's failure as
+/// that, and not as its own source failing.
 #[derive(Debug)]
 pub struct Error {
     offset: u64,
@@ -39,8 +39,8 @@ impl Error {
 
     /// `err`, a failed read of the source `offset` bytes into the stream.
     ///
-    /// A failure that is itself a reader's error, carried through
-    /// [`io::Error`], is the reader's that failed, and is returned as it was.
+    /// An [`io::Error`] carrying the error a reader failed with is that
+    /// reader's failure, and is returned as it was.
     /// Any other is the source failing to deliver what it holds:
     /// [`ErrorKind::Io`], with `err` as its source. A caller that retries such
     /// a failure can tell it from a refused archive, which a retry will not
@@ -64,8 +64,8 @@ impl Error {
 
     /// Where in the stream it failed, in bytes from its start.
     ///
-    /// For a refusal of a header or of the metadata a header carries, the
-    /// offset of that header's block. For an archive that ends early, or a
+    /// For a refusal of a header or of the records a header holds, the offset
+    /// of that header's block. For an archive that ends early, or a
     /// source that fails, the offset the stream had reached.
     #[must_use]
     pub fn offset(&self) -> u64 {
@@ -88,10 +88,11 @@ impl core::error::Error for Error {
 }
 
 impl From<Error> for io::Error {
-    /// The source's own failure, for [`ErrorKind::Io`]; otherwise an error of
-    /// kind [`UnexpectedEof`](io::ErrorKind::UnexpectedEof) for an archive
-    /// that ends early and [`InvalidData`](io::ErrorKind::InvalidData) for any
-    /// other refusal, carrying `err`, which `io::Error::downcast` recovers.
+    /// The source's own failure, for [`ErrorKind::Io`]. For any other kind,
+    /// an [`io::Error`] that carries it, which `io::Error::downcast` recovers.
+    /// Its kind is [`UnexpectedEof`](io::ErrorKind::UnexpectedEof) for an
+    /// archive that ends early, and [`InvalidData`](io::ErrorKind::InvalidData)
+    /// for any other refusal.
     fn from(err: Error) -> io::Error {
         match err {
             Error {
@@ -113,9 +114,9 @@ impl From<Error> for io::Error {
 /// What is wrong with an archive the reader refuses, or what else failed.
 ///
 /// Where the reader refuses an archive that some other reader reads, the
-/// variant's documentation says what the readers that read it disagree about:
-/// GNU tar, bsdtar, Go's `archive/tar` and Python's `tarfile`, which are the
-/// readers ferrotape is measured against.
+/// variant's documentation says what the readers disagree about. The readers
+/// are GNU tar, bsdtar, Go's `archive/tar` and Python's `tarfile`, which
+/// ferrotape is measured against.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -123,21 +124,22 @@ pub enum ErrorKind {
     /// [`source`](core::error::Error::source) is the failure, as the source
     /// returned it.
     Io,
-    /// The stream is not a tar archive: it ends before its first block is
-    /// whole, or its first block carries neither magic nor a checksum that
-    /// matches, as the first 512 bytes of a file in another format do.
+    /// The stream is not a tar archive. It ends before its first block is
+    /// whole, or its first block holds neither magic nor a checksum that
+    /// matches. The first 512 bytes of a file in another format are such a
+    /// block.
     ///
-    /// A first header that carries the magic and fails its checksum is a
-    /// damaged archive, [`Checksum`](Self::Checksum), and a first header
-    /// refused for what it declares keeps the kind it was refused for.
+    /// A first header that holds the magic and fails its checksum is a
+    /// damaged archive, [`Checksum`](Self::Checksum). A first header refused
+    /// for what it declares keeps the kind it was refused for.
     NotATar,
     /// The archive ends before what it declares is complete.
     Truncated(Truncation),
-    /// A header carrying the ustar or GNU magic fails its checksum: the
-    /// stored value matches neither the unsigned sum of the block's bytes nor
-    /// the signed sum some historical writers stored.
+    /// A header holding the ustar or GNU magic fails its checksum. The stored
+    /// value matches neither the unsigned sum of the block's bytes nor the
+    /// signed sum some historical writers stored.
     Checksum,
-    /// A block where a header belongs, after the first, carries neither magic
+    /// A block where a header belongs, after the first, holds neither magic
     /// nor a checksum that matches.
     NotAHeader,
     /// A numeric header field does not read as a value it may hold.
@@ -154,10 +156,10 @@ pub enum ErrorKind {
     /// A pax record the reader applies to its member holds a value the
     /// record may not hold.
     ///
-    /// A number is decimal digits and nothing else: an integer parser's `+`
+    /// A number is decimal digits and nothing else. An integer parser's `+`
     /// is refused, since GNU tar refuses a `size` of `+5` and bsdtar misframes
     /// the archive on it. A `uid` or `gid` above 2^32 - 1 is out of range,
-    /// which GNU tar refuses and the other readers read; ids here are 32-bit.
+    /// which GNU tar refuses and the other readers read. Ids here are 32-bit.
     /// A `size` is out of range where the block padding after it would not
     /// fit in 64 bits.
     PaxValue {
@@ -169,7 +171,7 @@ pub enum ErrorKind {
     /// A pax `path`, `linkpath`, `uname` or `gname` record is empty.
     ///
     /// bsdtar and Go read an empty value as POSIX's deletion of the record,
-    /// leaving the header's own field to stand; Python reads it as the empty
+    /// leaving the header's own field to stand. Python reads it as the empty
     /// value, and so does GNU tar for each of these but `path`. The readers
     /// name the member, its link target or its owner differently. An empty
     /// numeric record is [`PaxValue`](Self::PaxValue).
@@ -191,9 +193,9 @@ pub enum ErrorKind {
     /// and at both levels in a global header whose records
     /// [`GlobalHeaders::Apply`](crate::GlobalHeaders::Apply) applies.
     ///
-    /// POSIX gives the last record precedence, and GNU tar, bsdtar, Go and
-    /// Python take the last in a member's own header; the `tar` crate takes
-    /// the first, so a repeated `size` frames the member differently there.
+    /// POSIX gives the last record precedence, and the reference readers take
+    /// the last in a member's own header. The `tar` crate takes the first, so
+    /// a repeated `size` frames the member differently there.
     /// Of a global header's records, GNU tar applies the first and Python the
     /// last. Otherwise, at [`Level::Compatible`](crate::Level::Compatible),
     /// the last is read. A keyword repeated with one value is read at both
@@ -206,31 +208,31 @@ pub enum ErrorKind {
     /// headers, two GNU long names or long links, or two global extended
     /// headers.
     ///
-    /// No writer emits a second, and the readers part ways over one: GNU tar
-    /// and Go take the last, Python the first long name and a merge of the
-    /// pax records, and bsdtar refuses, as it refuses two global headers with
+    /// No writer emits a second, and the readers part ways over one. GNU tar
+    /// and Go take the last. Python takes the first long name and a merge of
+    /// the pax records. bsdtar refuses, as it refuses two global headers with
     /// no member between them.
     RepeatedMetadata(Metadata),
     /// A GNU long name or long link holds a NUL before its last byte.
     /// Refused at [`Level::Strict`](crate::Level::Strict).
     ///
-    /// GNU tar, bsdtar, Go and Python end the name at its first NUL. The
-    /// `tar` and `tar-core` crates strip one trailing NUL and keep the rest,
-    /// bytes after an inner NUL and a second NUL included, and so name the
-    /// member differently. At [`Level::Compatible`](crate::Level::Compatible)
+    /// The reference readers end the name at its first NUL. The `tar` and
+    /// `tar-core` crates strip one trailing NUL and keep the rest, bytes after
+    /// an inner NUL and a second NUL included. They name the member
+    /// differently. At [`Level::Compatible`](crate::Level::Compatible)
     /// the name ends at its first NUL.
     LongNameNul(Metadata),
     /// A GNU long name or long link holds no NUL, and the padding after its
     /// data begins with a byte that is not one.
     ///
     /// GNU tar and Python read the name on past its size, into the padding,
-    /// as far as the first NUL; bsdtar and Go read as far as its size, and so
+    /// as far as the first NUL. bsdtar and Go read as far as its size, and so
     /// name the member, or its link target, differently. Where the data
     /// holds a NUL, or the padding begins with one, every reader reads the
     /// same name.
     LongNameOverrun(Metadata),
-    /// A metadata member states nothing: a pax extended header or a global
-    /// one with no records, or a GNU long link whose value is empty.
+    /// A metadata member holds nothing: a pax extended header or a global one
+    /// with no records, or a GNU long link whose value is empty.
     ///
     /// bsdtar fails on an empty pax or global header, having listed the
     /// members before it, where GNU tar, Go and Python read on. GNU tar and
@@ -238,21 +240,20 @@ pub enum ErrorKind {
     /// and Go the target its own header names. An empty GNU long name leaves
     /// the member no name ([`EmptyName`](Self::EmptyName)).
     EmptyMetadata(Metadata),
-    /// A header whose magic and version are not exactly POSIX's (`ustar\0`
-    /// and `00`) or GNU's (`ustar ` and ` \0`), a v7 header with none among
-    /// them, has the typeflag of a pax extended header, a GNU long name or a
-    /// GNU long link. Refused at [`Level::Strict`](crate::Level::Strict).
+    /// A header has the typeflag of a pax extended header, a GNU long name or
+    /// a GNU long link. Its magic and version are not exactly POSIX's
+    /// (`ustar\0` and `00`) or GNU's (`ustar ` and ` \0`), as in a v7 header,
+    /// which has none. Refused at [`Level::Strict`](crate::Level::Strict).
     ///
-    /// GNU tar, bsdtar, Go and Python apply it to the member after it, as
-    /// they would under either pair; the `tar` and `tar-core` crates read it
-    /// as a member of its own, and the member after it under its own name.
+    /// The reference readers apply it to the member after it, as they would
+    /// under either pair. The `tar` and `tar-core` crates read it as a member
+    /// of its own, and the member after it under its own name.
     /// At [`Level::Compatible`](crate::Level::Compatible) it is applied.
     MetadataWithoutMagic(Metadata),
-    /// A pax `path` record and a GNU long name name the member differently,
-    /// or a pax `linkpath` record and a GNU long link name its target
-    /// differently.
+    /// A pax `path` record names the member otherwise than a GNU long name,
+    /// or a `linkpath` record its target otherwise than a long link.
     ///
-    /// GNU tar and bsdtar take the pax record; Python and Go take the long
+    /// GNU tar and bsdtar take the pax record. Python and Go take the long
     /// name. Where the two agree, the member is read.
     LongNameConflict {
         /// The pax record's keyword: [`Keyword::Path`] or
@@ -265,66 +266,68 @@ pub enum ErrorKind {
     /// A keyword ends at its first `=`, so GNU tar writes `=` in a name as
     /// `%3D`, and `%` as `%25`, and reads both back. bsdtar and Go read the
     /// name as spelled, and so extract or report the attribute under another
-    /// name. No reader extracts an attribute with an empty name; Go reports
+    /// name. No reader extracts an attribute with an empty name. Go reports
     /// one.
     XattrName {
         /// The record's keyword, as the archive spells it.
         keyword: Vec<u8>,
     },
-    /// A pax `RHT.security.selinux` record, a second spelling of the
-    /// SELinux label `security.selinux`, beside another record of the label
-    /// that it does not repeat as GNU tar writes the two; or, alone, given
-    /// twice, empty, or holding a NUL.
+    /// A pax `RHT.security.selinux` record, a second spelling of the SELinux
+    /// label `security.selinux`, in a form the readers apply differently:
+    ///
+    /// - Beside another record of the label that it does not repeat as GNU
+    ///   tar writes the two
+    /// - Alone, and given twice, empty or holding a NUL
     ///
     /// GNU tar applies the record only with `--selinux`, after any
-    /// `SCHILY.xattr.` record of the label, with a NUL appended; bsdtar
-    /// applies every record of the label in the archive's order; Go reports
-    /// only the `SCHILY.xattr.` record. The member is read where a later
-    /// `SCHILY.xattr.security.selinux` record, the last, holds the same
-    /// context followed by one NUL, which every reader then extracts alike,
-    /// and where the record is alone, given once with a context, which GNU
-    /// tar with `--selinux` and bsdtar apply alike.
+    /// `SCHILY.xattr.` record of the label, with a NUL appended. bsdtar
+    /// applies every record of the label in the archive's order. Go reports
+    /// only the `SCHILY.xattr.` record. The member is read in two forms. In
+    /// one, a later `SCHILY.xattr.security.selinux` record, the last, holds the
+    /// same context followed by one NUL, which every reader then extracts
+    /// alike. In the other, the record is alone, given once with a context,
+    /// which GNU tar with `--selinux` and bsdtar apply alike.
     SelinuxConflict,
-    /// A device's `SCHILY.devmajor` or `SCHILY.devminor` record, a missing
-    /// one taken as 0, states other numbers than its header, or is not
-    /// decimal digits.
+    /// A device's `SCHILY.devmajor` or `SCHILY.devminor` record states other
+    /// numbers than its header, or is not decimal digits. A missing record
+    /// counts as 0.
     ///
-    /// bsdtar takes a device's numbers from these records, a missing one as
-    /// 0, and GNU tar, Go and Python from the header, so they make different
-    /// devices of it. bsdtar writes one record alone for a number of 262,144
-    /// or more, and reads its own archive of such a device with the other
-    /// number 0. Records that state the header's numbers are read.
+    /// bsdtar takes a device's numbers from these records, a missing one
+    /// as 0. GNU tar, Go and Python take them from the header, so the readers
+    /// make different devices of it. For a number of 262,144 or more, bsdtar
+    /// writes one record alone. It reads its own archive of such a device
+    /// with the other number 0. Records that state the header's numbers are
+    /// read.
     DeviceConflict,
     /// A pax `hdrcharset` record names neither of POSIX's two character
     /// sets, `BINARY` and `ISO-IR 10646 2000 UTF-8`.
     ///
-    /// bsdtar reports another value as an error and reads on, and then reads
-    /// a `path` ending in `/` over a regular file as a regular file, where
-    /// GNU tar, which ignores the record, reads a directory, as bsdtar does
-    /// beside either of POSIX's values.
+    /// bsdtar reports another value as an error and reads on. It then reads a
+    /// `path` ending in `/` over a regular file as a regular file. GNU tar,
+    /// which ignores the record, reads a directory, as bsdtar does beside
+    /// either of POSIX's values.
     UnknownCharset {
         /// The record's value.
         value: Vec<u8>,
     },
-    /// A member whose mode has setuid, setgid or sticky carries an access
-    /// control list, a `SCHILY.acl.access` record. Refused at
+    /// A member whose mode has setuid, setgid or sticky has an access control
+    /// list, a `SCHILY.acl.access` record. Refused at
     /// [`Level::Strict`](crate::Level::Strict).
     ///
-    /// GNU tar, extracting the list, keeps the three bits the mode holds.
-    /// bsdtar takes the mode from the list and drops all three: a setgid
-    /// directory extracts without setgid, and a sticky one, `1777`, as
-    /// `777`, where anyone may remove another's files. At
+    /// GNU tar, extracting the list, keeps the three bits the mode has.
+    /// bsdtar takes the mode from the list and drops all three. A setgid
+    /// directory extracts without setgid, and a sticky one, `1777`, as `777`,
+    /// where anyone may remove another's files. At
     /// [`Level::Compatible`](crate::Level::Compatible) the member is read
-    /// with the header's mode, as GNU tar extracts it, which is the one
-    /// archive that level reads where the reference readers extract
-    /// differently.
+    /// with the header's mode, as GNU tar extracts it. It is the one archive
+    /// that level reads where the reference readers extract differently.
     SpecialBitsWithAcl,
     /// A pax `mtime`, `atime` or `ctime` record is before 1970 and has a
     /// fraction of a second.
     ///
     /// bsdtar reads the fraction forward from the second the digits name, so
-    /// it reads `-1.5` as half a second before the epoch, where GNU tar, Go
-    /// and Python read a second and a half: another time, and another whole
+    /// it reads `-1.5` as half a second before the epoch. GNU tar, Go and
+    /// Python read a second and a half: another time, and another whole
     /// second. A time before 1970 in whole seconds is read alike.
     FractionBeforeEpoch {
         /// The record's keyword: [`Keyword::Mtime`], [`Keyword::Atime`] or
@@ -334,7 +337,7 @@ pub enum ErrorKind {
     /// A `SCHILY.xattr.` record's value is empty.
     ///
     /// GNU tar and bsdtar set an empty attribute. Go reads an empty value as
-    /// the record's deletion, as POSIX specifies for a pax record, and reports
+    /// the record's deletion, as POSIX specifies for a pax record. It reports
     /// no attribute, so a Go-based extractor sets none.
     EmptyXattr {
         /// The record's keyword, as the archive spells it.
@@ -344,12 +347,12 @@ pub enum ErrorKind {
     /// `SCHILY.xattr.` records do not state alike.
     ///
     /// bsdtar writes each attribute in both kinds of record, and applies
-    /// both, in the archive's order; GNU tar and Go apply only the
+    /// both, in the archive's order. GNU tar and Go apply only the
     /// `SCHILY.xattr.` records. The member is read where each
     /// `LIBARCHIVE.xattr.` record names an attribute a `SCHILY.xattr.` record
-    /// also names, spelled alike and with no `%`, and holds the base64 of
-    /// that attribute's value, padded or not: every reader then extracts the
-    /// same attributes.
+    /// also names, spelled alike and with no `%`. The record holds the base64
+    /// of that attribute's value, padded or not. Every reader then extracts
+    /// the same attributes.
     XattrConflict {
         /// The `LIBARCHIVE.xattr.` record's keyword, as the archive spells it.
         keyword: Vec<u8>,
@@ -358,22 +361,23 @@ pub enum ErrorKind {
     /// metadata describes. Go lets the global header consume the waiting
     /// metadata, which GNU tar, bsdtar and Python apply to the member.
     GlobalBetweenMetadata,
-    /// A global extended header carries a record the reader's
+    /// A global extended header holds a record the reader's
     /// [`GlobalHeaders`](crate::GlobalHeaders) mode refuses: with
     /// [`Refuse`](crate::GlobalHeaders::Refuse), the default, any record but
     /// `comment`.
     ///
     /// GNU tar and Python apply a global header's records to every later
-    /// member, and differ from each other over a second header, an empty
-    /// value, a vendor keyword and `size`; bsdtar and Go apply none. A global
-    /// `linkpath`, for one, points every symbolic link elsewhere for the first
-    /// two. `comment` changes no member: it is the record `git archive`
-    /// writes, holding the commit an archive was made from.
+    /// member. They differ from each other over a second header, an empty
+    /// value, a vendor keyword and `size`. bsdtar and Go apply none. A global
+    /// `linkpath`, for one, points every symbolic link elsewhere for GNU tar
+    /// and Python. `comment` changes no member: it is the record `git
+    /// archive` writes, holding the commit an archive was made from.
     ///
     /// With [`Apply`](crate::GlobalHeaders::Apply), the records it applies
-    /// are read, and this is any other record but `comment`: a `size`, which
-    /// the two frame members by differently, or a record not yet measured
-    /// against both. [`Defer`](crate::GlobalHeaders::Defer) refuses none.
+    /// are read, and this kind refuses any other record but `comment`. Such a
+    /// record is a `size`, which the two frame members by differently, or a
+    /// record not yet measured against both.
+    /// [`Defer`](crate::GlobalHeaders::Defer) refuses none.
     GlobalRecord {
         /// The record's keyword, as the archive spells it.
         keyword: Vec<u8>,
@@ -393,10 +397,10 @@ pub enum ErrorKind {
     SolarisAcl,
     /// A header of typeflag `M`, GNU's continuation of a file begun in an
     /// earlier volume of a multi-volume archive. GNU tar, reading one volume,
-    /// does not extract it; bsdtar and Python extract it as a regular file.
+    /// does not extract it. bsdtar and Python extract it as a regular file.
     VolumeContinuation,
     /// A header of typeflag `V`, a GNU volume label, which names the archive
-    /// rather than a member. GNU tar and bsdtar extract nothing for it;
+    /// rather than a member. GNU tar and bsdtar extract nothing for it.
     /// Python extracts it as a regular file holding its data, and Go reports
     /// it as a member.
     VolumeLabel,
@@ -404,50 +408,51 @@ pub enum ErrorKind {
     /// POSIX header keeps its name prefix. GNU tar writes an incremental
     /// archive's access and change times there.
     ///
-    /// Python joins those bytes to the member's name, as it would a prefix;
+    /// Python joins those bytes to the member's name, as it would a prefix.
     /// GNU tar, bsdtar and Go never do, and name the member differently.
     PrefixArea,
-    /// A header whose magic and version are neither POSIX's (`ustar\0`, with
-    /// any version) nor GNU's (`ustar ` and ` \0`) holds an owner name, or,
-    /// for a character or block device, a device number other than 0.
+    /// A header holds an owner name, or, for a character or block device, a
+    /// device number other than 0. Its magic and version are neither POSIX's
+    /// (`ustar\0`, with any version) nor GNU's (`ustar ` and ` \0`).
     ///
-    /// The readers do not agree on which such headers carry those fields.
-    /// Python reads the names and device numbers under any magic, and owns
-    /// what it extracts by the names; bsdtar reads them where the magic
-    /// begins `ustar`; GNU tar and Go read them only under the two pairs
-    /// above, and use the ids. A header with any other magic and version is
-    /// read, as a v7 header is, where those fields hold nothing.
+    /// The readers do not agree on which such headers hold those fields.
+    /// Python reads the names and device numbers under any magic, and sets
+    /// the owner of what it extracts from the names. bsdtar reads them where
+    /// the magic begins `ustar`. GNU tar and Go read them only under the two
+    /// pairs above, and use the ids. A header with any other magic and
+    /// version is read, as a v7 header is, where those fields hold nothing.
     UnknownMagic,
     /// A POSIX header names its member with a prefix that ends in `/`, no
     /// pax record or long name replacing it.
     ///
-    /// GNU tar, Go and Python join the prefix to the name with a `/`, and
-    /// read prefix `a/` and name `b` as `a//b`, and prefix `/` and name `x`
-    /// as `//x`. bsdtar adds no `/` after a prefix that ends in one, and
+    /// GNU tar, Go and Python join the prefix to the name with a `/`. They
+    /// read prefix `a/` and name `b` as `a//b`, and prefix `/` and name `x` as
+    /// `//x`. bsdtar adds no `/` after a prefix that ends in one, and
     /// reads `a/b` and `/x`. A leading `//` is a name POSIX leaves to the
     /// system, and on Windows a network share.
     PrefixSlash,
     /// A member's name, after any long name and pax record, is empty. GNU tar
     /// substitutes `.`, bsdtar skips the member, and Python and Go report the
-    /// empty name.
+    /// empty name. For an empty GNU long name, bsdtar and Go take the
+    /// header's own name instead.
     EmptyName,
     /// A hard link names no target. GNU tar substitutes `.`, the directory
-    /// it extracts into; bsdtar, Go and Python read the empty name.
+    /// it extracts into. bsdtar, Go and Python read the empty name.
     HardLinkWithoutTarget,
     /// A regular member whose name ends in a separator, which marks it a
     /// directory, declares data, which no directory has. Taking the name
-    /// would read the data as the next header; taking the size would write a
+    /// would read the data as the next header. Taking the size would write a
     /// file at a directory's name.
     DirectoryWithData,
-    /// A regular member whose name ends in a separator, which marks it a
-    /// directory, carries a pax record other than those the reader applies,
-    /// `comment`, and `hdrcharset`.
+    /// A regular member named as a directory, by a trailing separator, has a
+    /// pax record other than those the reader applies, `comment` and
+    /// `hdrcharset`.
     ///
     /// bsdtar reads the member as a directory, as GNU tar does, until it
     /// fails to parse one of the member's records (an access control list,
-    /// `LIBARCHIVE.creationtime`, `LIBARCHIVE.symlinktype`), after which it
-    /// reads a regular file. Which records it fails on is open ended, so such
-    /// a member may carry only the records every reader reads alike.
+    /// `LIBARCHIVE.creationtime`, `LIBARCHIVE.symlinktype`). After that it
+    /// reads a regular file. The records it fails on are open ended, so such
+    /// a member may have only the records every reader reads alike.
     DirectoryWithRecord {
         /// The record's keyword, as the archive spells it.
         keyword: Vec<u8>,
@@ -455,7 +460,7 @@ pub enum ErrorKind {
     /// A member of a typeflag GNU tar does not know is named with a trailing
     /// `/`.
     ///
-    /// bsdtar reads it as a directory, and reads no data after it; GNU tar
+    /// bsdtar reads it as a directory, and reads no data after it. GNU tar
     /// and Python extract a regular file, its data the body it declares, GNU
     /// tar naming it without the `/`. Where the member declares a body, the
     /// headers in it are members to bsdtar alone. GNU tar knows the typeflags
@@ -464,19 +469,19 @@ pub enum ErrorKind {
         /// The member's typeflag.
         typeflag: u8,
     },
-    /// A member of a type that carries no data declares a size: a hard link
-    /// at every level, and at [`Level::Strict`](crate::Level::Strict) a
-    /// symbolic link, a directory, a device or a FIFO.
+    /// A member of a type that has no data declares a size. A hard link is
+    /// refused at every level. A symbolic link, a directory, a device or a
+    /// FIFO is refused at [`Level::Strict`](crate::Level::Strict).
     ///
-    /// Where the header's size field declares it, GNU tar, bsdtar, Go and
-    /// Python read no data after any of them. POSIX lets a hard link in a pax
-    /// archive carry its file's data after it, and so reads the size as data.
-    /// For the others the `tar` crate, and `tar-core` 0.1, read the size as
-    /// data, and so read the headers after it as that data. At
+    /// Where the header's size field declares it, the reference readers read
+    /// no data after any of them. POSIX lets a hard link in a pax archive
+    /// have its file's data after it, and so reads the size as data. For the
+    /// others the `tar` crate, and `tar-core` 0.1, read the size as data, and
+    /// so read the headers after it as that data. At
     /// [`Level::Compatible`](crate::Level::Compatible) the others are read
-    /// with no data, unless a pax `size` record declares the size: GNU tar
-    /// reads that much data after the member, where bsdtar, Go and Python
-    /// read none, so the headers in it are members to them alone.
+    /// with no data, unless a pax `size` record declares the size. GNU tar
+    /// then reads that much data after the member. bsdtar, Go and Python read
+    /// none, so the headers in it are members to them alone.
     SizeWithoutData {
         /// The member's kind.
         kind: EntryKind,
@@ -484,35 +489,36 @@ pub enum ErrorKind {
     /// A member that is not a link has a link target from a GNU long link or
     /// a pax `linkpath` record.
     ///
-    /// bsdtar extracts such a member as a hard link to that target, whatever
-    /// its kind, and writes the member's data into the target through the
-    /// link; GNU tar and Python make the member as its kind and leave the
+    /// bsdtar extracts such a member, whatever its kind, as a hard link to
+    /// that target. It writes the member's data into the target through the
+    /// link. GNU tar and Python make the member as its kind and leave the
     /// target as it was. A target in the header's own link name field is
     /// read, every reader passing over it on a member that is not a link.
     TargetWithoutLink {
         /// The member's kind.
         kind: EntryKind,
     },
-    /// A member that is not a directory carries a default access control
-    /// list, a `SCHILY.acl.default` record, empty or not.
+    /// A member that is not a directory has a default access control list, a
+    /// `SCHILY.acl.default` record, empty or not.
     ///
-    /// A default list is a directory's, passed on to what is created in it:
-    /// the kernel refuses one on any other kind of file, and neither GNU tar
+    /// A default list is a directory's, passed on to what is created in it.
+    /// The kernel refuses one on any other kind of file, and neither GNU tar
     /// nor bsdtar writes one there. bsdtar, which takes a member's mode from
-    /// its lists' text, lists and extracts such a member with mode `000`;
-    /// GNU tar, Go and Python read the header's mode.
+    /// its lists' text, lists and extracts such a member with mode `000`. GNU
+    /// tar, Go and Python read the header's mode.
     DefaultAclWithoutDirectory {
         /// The member's kind.
         kind: EntryKind,
     },
-    /// A GNU header that is not a sparse member (typeflag `S`) holding
-    /// anything in an old GNU sparse header's slots (bytes 386 to 481), or,
-    /// for a member that carries data, in its real size field (483 to 494).
+    /// A GNU header that is not a sparse member (typeflag `S`) holds
+    /// something in an old GNU sparse header's slots (bytes 386 to 481). For a
+    /// member that has data, something in its real size field (483 to 494) is
+    /// refused as well.
     ///
-    /// bsdtar reads these fields whatever the typeflag: a regular file's real
-    /// size field as its size, 2048 bytes where the header says 512, and any
-    /// slot as a map it fails on. GNU tar, Go and Python read the header's
-    /// own fields.
+    /// bsdtar reads these fields whatever the typeflag. It reads a regular
+    /// file's real size field as its size: 2048 bytes where the header
+    /// says 512. It reads any slot as a map it fails on. GNU tar, Go and Python read the
+    /// header's own fields.
     SparseFields,
     /// A sparse member whose map the reference readers would extract
     /// otherwise than one another, or which the reader would hold beyond its
@@ -548,7 +554,7 @@ pub enum ErrorKind {
     /// the archive's first zero block, and by
     /// [`Reader::finish`](crate::Reader::finish) in the stream after that.
     ///
-    /// GNU tar, bsdtar, Go and Python stop at the end. GNU tar with
+    /// The reference readers stop at the end. GNU tar with
     /// `--ignore-zeros` reads on, as does `tar-core` 0.1 past a single zero
     /// block, and both read whatever members follow. Archives joined end to
     /// end with `cat` are refused for it. The offset is that of the first
@@ -744,34 +750,39 @@ impl fmt::Display for ErrorKind {
 /// The rule a sparse member breaks.
 ///
 /// GNU tar and bsdtar write a sparse member's map in a few shapes, which the
-/// reference readers extract alike; they part ways over nearly every other.
-/// Each kind is one such way, measured.
+/// reference readers extract alike. They part ways over nearly every other
+/// shape. Each kind is one such way, measured.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum SparseFlaw {
-    /// Typeflag `S` under a magic and version other than GNU's: GNU tar and
+    /// Typeflag `S` under a magic and version other than GNU's. GNU tar and
     /// bsdtar read a regular member of its stored data, Python a sparse one,
-    /// and Go refuses it. Or pax sparse records on a header whose magic and
-    /// version are not POSIX's: GNU tar reads other data, and no member
-    /// after it, where the others read the file.
+    /// and Go refuses it.
+    ///
+    /// Pax sparse records on a header whose magic and version are not
+    /// POSIX's are refused too. GNU tar reads other data, and no member after
+    /// it, where the others read the file.
     Magic,
-    /// Pax sparse records on a member whose typeflag is not `0`: bsdtar fails
-    /// on it, and GNU tar extracts a symbolic link or a FIFO carrying them as
-    /// a regular file.
+    /// Pax sparse records on a member whose typeflag is not `0`. bsdtar fails
+    /// on it, and GNU tar extracts a symbolic link or a FIFO with such
+    /// records as a regular file.
     NotRegular,
-    /// Pax sparse records in a global extended header: bsdtar fails, and Go
-    /// reads the next member as a file of its stored data. Or, where global
-    /// headers are applied ([`GlobalHeaders::Apply`](crate::GlobalHeaders::Apply)),
-    /// an old GNU sparse member after one that sets a field: Python applies
-    /// none of its records to such a member, GNU tar all of them.
+    /// Pax sparse records in a global extended header. bsdtar fails, and Go
+    /// reads the next member as a file of its stored data.
+    ///
+    /// Where global headers are applied
+    /// ([`GlobalHeaders::Apply`](crate::GlobalHeaders::Apply)), an old GNU
+    /// sparse member after one that sets a field is refused too. Python
+    /// applies none of its records to such a member, GNU tar all of them.
     Global,
-    /// Sparse records not of exactly one of GNU's forms: two forms mixed, a
-    /// version other than 1.0, a required record missing, a record of none,
-    /// one given twice, or pax records beside typeflag `S`. The readers that
-    /// read such a member read different files.
+    /// Sparse records not of exactly one of GNU's forms. Two forms are mixed,
+    /// the version is other than 1.0, or a required record is missing. Or a
+    /// record is of no form, a record is given twice, or pax records are
+    /// beside typeflag `S`. The readers that read such a member read
+    /// different files.
     Records,
     /// A number in the map that is not decimal digits, or, in a format 1.0
-    /// map, more than 19 of them; or a slot or real size of an old GNU map
+    /// map, more than 19 of them. Or a slot or real size of an old GNU map
     /// that does not read as a header's numeric field, or is negative.
     Number,
     /// A count (`GNU.sparse.numblocks`, or a format 1.0 map's first number)
@@ -779,8 +790,8 @@ pub enum SparseFlaw {
     /// length out of its pair.
     Count,
     /// An old GNU map whose slots are not used from the first, or whose
-    /// extension flag is not set exactly where another block of used slots
-    /// follows a full one.
+    /// extension flags are out of place. The flag is set exactly where another
+    /// block of used slots follows a full one.
     Extension,
     /// A region that begins before the one before it ends: Go and bsdtar
     /// refuse it, and GNU tar and Python extract different files.
@@ -788,7 +799,7 @@ pub enum SparseFlaw {
     /// A region holding data that begins where the last region holding data
     /// ended: bsdtar fails on it.
     Adjacent,
-    /// A map whose last region does not end at the real size: GNU tar
+    /// A map whose last region does not end at the real size. GNU tar
     /// extracts the file only to the end of that region, the others to the
     /// real size. A map of no region ends at zero.
     End,
@@ -801,9 +812,10 @@ pub enum SparseFlaw {
     /// A real size of 2^60 or more, at which bsdtar fails.
     RealSize,
     /// `GNU.sparse.name` empty, holding a NUL, ending in `/`, or naming the
-    /// member otherwise than a `path` record or a GNU long name before it:
-    /// Python takes the later of a record and the name, extracts nothing for
-    /// an empty one, and keeps a NUL that GNU tar and bsdtar cut at.
+    /// member otherwise than a `path` record or a GNU long name before it.
+    /// Python takes the later of a record and the name, and extracts nothing
+    /// for an empty one. It keeps a NUL that GNU tar and bsdtar cut at. bsdtar
+    /// alone extracts a directory for one ending in `/`.
     Name,
     /// A pax `size` record on a sparse member, which Python reads as its
     /// data's length.
@@ -812,7 +824,7 @@ pub enum SparseFlaw {
     /// its blocks, an old GNU header's and its extension blocks, or a format
     /// 1.0 map's.
     MapLimit,
-    /// A pax sparse member at [`Level::Strict`](crate::Level::Strict): Rust's
+    /// A pax sparse member at [`Level::Strict`](crate::Level::Strict). Rust's
     /// `tar` reads it as a regular member of its stored data, under its
     /// header's name, and for format 0.0 under the file's own name.
     PaxForm,
@@ -906,13 +918,15 @@ pub enum Numeric {
     /// It is not a number in the field's form: octal digits or base-256 in a
     /// header field, decimal digits in a pax record. Octal digits are ended
     /// by a space or a NUL, and after a space the field holds only spaces up
-    /// to its first NUL: GNU tar and bsdtar read digits followed by a space
-    /// and more as the first digits, where Go and Python cannot read them,
-    /// and Python ends the archive at that header.
+    /// to its first NUL. GNU tar reads digits followed by a space and more as
+    /// the first digits. bsdtar does too, where the header is not the
+    /// archive's first. Go and Python cannot read them, and Python ends the
+    /// archive at that header.
     Unreadable,
-    /// It reads, as a value the field cannot hold: a negative mode, id or
-    /// size, one too large for the field's type, or a size of 2^60 or more,
-    /// at which bsdtar stops where GNU tar, Go and Python read on.
+    /// It reads as a value the field cannot hold: a negative mode, id or size,
+    /// or one too large for the field's type. A size of 2^60 or more is out
+    /// of range too, since bsdtar stops at it where GNU tar, Go and Python
+    /// read on.
     OutOfRange,
 }
 
