@@ -87,8 +87,15 @@ pub fn read(archive: &[u8], level: Level, mode: Mode) -> (Vec<Read>, Verdict) {
         match reader.next_entry() {
             Ok(None) => break,
             Ok(Some(entry)) => {
+                // One byte past the size, which no member's data reaches, so
+                // data that runs on shows as a difference rather than
+                // filling memory.
                 let mut data = Vec::new();
-                let failed = reader.data().read_to_end(&mut data).err();
+                let failed = reader
+                    .data()
+                    .take(entry.size().saturating_add(1))
+                    .read_to_end(&mut data)
+                    .err();
                 members.push(Read {
                     kind: entry.kind(),
                     typeflag: entry.typeflag(),

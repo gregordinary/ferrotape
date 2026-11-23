@@ -3,10 +3,8 @@
 
 mod support;
 
-use std::io::Read;
-
 use ferrotape::{EntryKind, ErrorKind, GlobalHeaders, Level, Reader};
-use support::{BLOCK, Header, Magic, Tar, first, paths, paths_at, pax_record};
+use support::{BLOCK, Header, Magic, Tar, first, paths, paths_at, pax_record, read_whole};
 
 #[test]
 fn every_typeflag_has_a_kind_and_keeps_its_byte() {
@@ -285,8 +283,7 @@ fn a_member_holds_its_own_header_and_where_it_lies() {
         b"data",
         "the data lies where it says",
     );
-    let mut data = Vec::new();
-    reader.data().read_to_end(&mut data).unwrap();
+    let data = read_whole(reader.data(), second.size()).unwrap();
     assert_eq!(data, b"data");
 }
 

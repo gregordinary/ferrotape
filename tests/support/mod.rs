@@ -9,6 +9,8 @@
 
 #![allow(dead_code, reason = "each test binary uses a part of this module")]
 
+use std::io::{self, Read};
+
 use ferrotape::{Entry, Error, Level, Reader};
 
 /// The size of a block, and of a header.
@@ -212,6 +214,19 @@ impl Tar {
     pub(crate) fn unterminated(&self) -> Vec<u8> {
         self.data.clone()
     }
+}
+
+/// Reads `source`, a member's data, to its end, or one byte past `size`.
+/// No member's data runs past its size, so a defect that makes the data
+/// endless fails here at once rather than filling memory.
+pub(crate) fn read_whole(source: impl Read, size: u64) -> io::Result<Vec<u8>> {
+    let mut data = Vec::new();
+    source.take(size.saturating_add(1)).read_to_end(&mut data)?;
+    assert!(
+        data.len() as u64 <= size,
+        "the data runs past the member's size"
+    );
+    Ok(data)
 }
 
 /// The first member of `archive`.

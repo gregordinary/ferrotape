@@ -11,7 +11,7 @@ mod support;
 use std::io::{Cursor, Read};
 
 use ferrotape::{Entry, ErrorKind, Level, Limits, Reader, Region, SparseFlaw};
-use support::{BLOCK, Header, Magic, Tar, pax_records, seal};
+use support::{BLOCK, Header, Magic, Tar, pax_records, read_whole, seal};
 
 /// Twelve bytes of GNU's octal form: eleven digits and a NUL.
 fn octal12(value: u64) -> [u8; 12] {
@@ -198,10 +198,7 @@ fn archive00() -> Vec<u8> {
 fn read_first(archive: &[u8], level: Level) -> Result<(Entry, Vec<u8>, Vec<u8>), ferrotape::Error> {
     let mut reader = Reader::new(archive).with_level(level);
     let entry = reader.next_entry()?.expect("a member");
-    let mut data = Vec::new();
-    reader
-        .data()
-        .read_to_end(&mut data)
+    let data = read_whole(reader.data(), entry.size())
         .map_err(|e| e.downcast::<ferrotape::Error>().unwrap())?;
     let next = reader.next_entry()?.expect("a second member");
     Ok((entry, data, next.path().to_vec()))
@@ -263,9 +260,9 @@ fn strict_reads_old_gnu_and_refuses_the_pax_forms() {
 fn stored_data_is_the_regions_alone() {
     for archive in [old_archive(), archive00(), archive01(), archive10()] {
         let mut reader = Reader::new(archive.as_slice()).with_level(Level::Compatible);
-        reader.next_entry().unwrap().unwrap();
-        let mut data = Vec::new();
-        reader.stored_data().read_to_end(&mut data).unwrap();
+        let entry = reader.next_entry().unwrap().unwrap();
+        let stored_size = entry.sparse().expect("a sparse member").stored_size();
+        let data = read_whole(reader.stored_data(), stored_size).unwrap();
         assert_eq!(data, stored(&REGIONS));
         assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"after");
     }
@@ -274,15 +271,14 @@ fn stored_data_is_the_regions_alone() {
 #[test]
 fn both_views_move_through_one_position() {
     let mut reader = Reader::new(Cursor::new(archive10())).with_level(Level::Compatible);
-    reader.next_entry().unwrap().unwrap();
+    let entry = reader.next_entry().unwrap().unwrap();
     // The first region through the stored view: its 512 bytes, the hole
     // before it passed over.
     let mut first = vec![0u8; 512];
     reader.stored_data().read_exact(&mut first).unwrap();
     assert_eq!(first, vec![b'A'; 512]);
     // The rest of the file from the end of that region.
-    let mut rest = Vec::new();
-    reader.data().read_to_end(&mut rest).unwrap();
+    let rest = read_whole(reader.data(), entry.size()).unwrap();
     assert_eq!(rest, file(&REGIONS, REAL)[1536..]);
     // Nothing is left for either.
     assert_eq!(reader.stored_data().read(&mut [0u8; 8]).unwrap(), 0);
@@ -797,8 +793,7 @@ fn nothing_is_delivered_after_the_last_member() {
     let mut reader = Reader::new(archive10_alone()).with_level(Level::Compatible);
     assert!(reader.next_entry().unwrap().unwrap().sparse().is_some());
     assert!(reader.next_entry().unwrap().is_none());
-    let mut rest = Vec::new();
-    reader.data().read_to_end(&mut rest).unwrap();
+    let rest = read_whole(reader.data(), 0).unwrap();
     assert!(rest.is_empty());
 }
 
@@ -904,8 +899,8 @@ fn a_real_size_is_below_2_to_the_60() {
     reader.data().read_exact(&mut start).unwrap();
     assert!(start.iter().all(|byte| *byte == 0));
     // The stored view reaches the data at once.
-    let mut region = Vec::new();
-    reader.stored_data().read_to_end(&mut region).unwrap();
+    let stored_size = entry.sparse().expect("a sparse member").stored_size();
+    let region = read_whole(reader.stored_data(), stored_size).unwrap();
     assert_eq!(region, vec![b'A'; 512]);
 
     let regions = [(1u64 << 60, 0)];

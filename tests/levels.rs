@@ -3,10 +3,10 @@
 
 mod support;
 
-use std::io::Read;
-
 use ferrotape::{EntryKind, ErrorKind, Level, Metadata, Reader};
-use support::{BLOCK, Header, Magic, Tar, first, first_at, paths, paths_at, pax_record};
+use support::{
+    BLOCK, Header, Magic, Tar, first, first_at, paths, paths_at, pax_record, read_whole,
+};
 
 const LEVELS: [Level; 2] = [Level::Strict, Level::Compatible];
 
@@ -125,8 +125,7 @@ fn a_member_of_a_type_that_carries_no_data_reads_none_and_declares_none_in_stric
         let entry = reader.next_entry().unwrap().unwrap();
         assert_eq!((entry.kind(), entry.size()), (kind, 0));
         assert_eq!(entry.declared_size(), hidden.len() as u64);
-        let mut data = Vec::new();
-        reader.data().read_to_end(&mut data).unwrap();
+        let data = read_whole(reader.data(), entry.size()).unwrap();
         assert!(data.is_empty());
         assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"hidden");
         assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"next");

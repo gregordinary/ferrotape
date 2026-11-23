@@ -111,14 +111,16 @@ fn list<R: Read>(mut reader: Reader<R>, read_data: bool, input: u64) -> Listing 
         }
         let mut data = Vec::new();
         let expand = entry.sparse().is_none_or(|map| map.real_size() <= EXPAND);
+        let want = if expand { entry.size() } else { stored(&entry) };
+        // One byte past what the data holds, so data that runs on fails the
+        // length check below rather than filling memory.
         let read = if expand {
-            reader.data().read_to_end(&mut data)
+            reader.data().take(want + 1).read_to_end(&mut data)
         } else {
-            reader.stored_data().read_to_end(&mut data)
+            reader.stored_data().take(want + 1).read_to_end(&mut data)
         };
         match read {
             Ok(_) => {
-                let want = if expand { entry.size() } else { stored(&entry) };
                 assert_eq!(data.len() as u64, want);
                 assert!(entry.data_offset() + stored(&entry) <= input);
                 if let Some(map) = entry.sparse().filter(|_| expand) {

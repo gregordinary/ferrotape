@@ -8,15 +8,14 @@ use std::io::{self, Read};
 use ferrotape::{
     EntryKind, Error, ErrorKind, Keyword, Level, Limits, Metadata, Reader, Truncation,
 };
-use support::{BLOCK, Header, Magic, Tar, first, first_at, paths, pax_record};
+use support::{BLOCK, Header, Magic, Tar, first, first_at, paths, pax_record, read_whole};
 
 const END: [u8; 2 * BLOCK] = [0; 2 * BLOCK];
 
-/// Everything left of the current member's data, read through `Data`.
-fn rest_of_data<R: Read>(reader: &mut Reader<R>) -> Vec<u8> {
-    let mut data = Vec::new();
-    reader.data().read_to_end(&mut data).unwrap();
-    data
+/// Everything left of the current member's data, at most `size` bytes,
+/// read through `Data`.
+fn rest_of_data<R: Read>(reader: &mut Reader<R>, size: u64) -> Vec<u8> {
+    read_whole(reader.data(), size).unwrap()
 }
 
 #[test]
@@ -27,13 +26,13 @@ fn members_are_read_in_order_with_their_data() {
         .finish();
     let mut reader = Reader::new(&archive[..]);
     // Before the first member there is no data to read.
-    assert_eq!(rest_of_data(&mut reader), b"");
+    assert_eq!(rest_of_data(&mut reader, 0), b"");
 
     let a = reader.next_entry().unwrap().unwrap();
     assert_eq!((a.path(), a.typeflag(), a.size()), (&b"a"[..], b'0', 5));
-    assert_eq!(rest_of_data(&mut reader), b"hello");
+    assert_eq!(rest_of_data(&mut reader, a.size()), b"hello");
     // The data ends where the member's does.
-    assert_eq!(rest_of_data(&mut reader), b"");
+    assert_eq!(rest_of_data(&mut reader, 0), b"");
 
     let b = reader.next_entry().unwrap().unwrap();
     assert_eq!(b.path(), b"b");
@@ -66,7 +65,7 @@ fn a_long_name_cut_after_a_separator_is_still_the_file_it_is() {
     let entry = reader.next_entry().unwrap().unwrap();
     assert_eq!(entry.path(), long_name.as_bytes());
     assert_eq!(entry.typeflag(), b'0', "a regular file, not a directory");
-    assert_eq!(rest_of_data(&mut reader), body);
+    assert_eq!(rest_of_data(&mut reader, entry.size()), body);
     assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"after.txt");
     assert!(reader.next_entry().unwrap().is_none());
 }
@@ -505,8 +504,8 @@ fn a_read_through_data_fails_with_the_readers_error() {
         .raw(&[b'x'; 700])
         .unterminated();
     let mut reader = Reader::new(&archive[..]);
-    reader.next_entry().unwrap().unwrap();
-    let err = reader.data().read_to_end(&mut Vec::new()).unwrap_err();
+    let entry = reader.next_entry().unwrap().unwrap();
+    let err = read_whole(reader.data(), entry.size()).unwrap_err();
     assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
     let err = err.downcast::<Error>().expect("the reader's error");
     assert_eq!(err.kind(), &ErrorKind::Truncated(Truncation::Data));
@@ -614,8 +613,8 @@ fn an_interrupted_read_is_retried_rather_than_reported() {
         inner: &trailer[..],
         interrupt: false,
     });
-    reader.next_entry().unwrap().unwrap();
-    assert_eq!(rest_of_data(&mut reader), vec![b'x'; 3000]);
+    let member = reader.next_entry().unwrap().unwrap();
+    assert_eq!(rest_of_data(&mut reader, member.size()), vec![b'x'; 3000]);
     assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"second");
     assert!(reader.next_entry().unwrap().is_none());
     reader.finish(1 << 20).unwrap();
