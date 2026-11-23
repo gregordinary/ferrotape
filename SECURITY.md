@@ -28,32 +28,38 @@ You will get an acknowledgement within a few days. A fixed vulnerability is
 announced in a GitHub security advisory and a RustSec advisory, which name the
 reporter unless you ask otherwise.
 
-## What is in scope
+## Scope
 
 - **A member-set difference.** With its default settings, ferrotape reads an
   archive only where GNU tar, bsdtar, Go's `archive/tar` and Python's
   `tarfile` agree on its members. It refuses the rest. An archive it reads
-  otherwise than they do is a vulnerability, fixed and announced as one. That
-  is a member they do not see, one they see missing, or one whose path, link
-  target, data, owner, mode, times or extended attributes differ. Every other
-  setting names, in its documentation, the readers it reads as:
-  `Level::Compatible` the same four, `GlobalHeaders::Apply` GNU tar and
-  Python, and `GlobalHeaders::Defer` bsdtar and Go, for the global headers
-  each applies as they do. A member-set difference from the readers a setting
-  names is a vulnerability at that setting too.
+  otherwise than they do is a vulnerability, fixed and announced as one. Such
+  an archive has a member only one side sees, or a member whose path, link
+  target, data, owner, mode, times or extended attributes differ.
+- **A member-set difference at another setting.** Every other setting names,
+  in its documentation, the readers it reads as. A member-set difference from
+  those readers is a vulnerability at that setting too. `Level::Compatible`
+  names the same four, `GlobalHeaders::Apply` GNU tar and Python, and
+  `GlobalHeaders::Defer` bsdtar and Go, for the global headers each applies
+  as they do.
 - **A header that reads back as another member.** A header ferrotape writes
   that ferrotape or one of those readers reads back with another path, link
-  target, size, owner, mode or time.
+  target, size, owner, mode or time. A difference the documentation lists is
+  the exception.
 - **Panics and runaway resource use on hostile input.** The library is
   written not to panic, and every allocation an archive can drive has a
-  ceiling the caller can set. A panic, memory beyond those ceilings, or time
-  that grows faster than the archive's length, on any archive, is a
-  vulnerability. The one exception is a sparse member's data read through
-  `Reader::data`: the file it stands for, holes as zeros, whose size the
-  archive states before any of it is read (`Entry::size`) and which can be
-  up to 2^60 - 1 bytes; `Reader::stored_data` reads what the archive holds.
+  ceiling the caller can set. Reading takes time linear in the archive's
+  length, apart from sorting a pax extended header's records to compare them
+  (n log n in the header's length). A panic, memory beyond those ceilings, or
+  time beyond that, on any archive, is a vulnerability. A sparse member's
+  data is the one exception (below).
 
-## What is not in scope
+## Out of scope
+
+- **A sparse member's size.** `Reader::data` delivers the file a sparse
+  member stands for, holes as zeros, which can be up to 2^60 - 1 bytes. The
+  archive states that size before any data is read (`Entry::size`).
+  `Reader::stored_data` reads only what the archive holds.
 
 - **The documented differences from those readers.** The documentation lists
   where ferrotape reads an archive otherwise than they do, on purpose. A
@@ -61,19 +67,20 @@ reporter unless you ask otherwise.
   it is one of the cases above. A refusal reads nothing, so an archive refused
   that the readers all read alike is an ordinary issue too.
 - **What a path means.** ferrotape reports a member's path and link target as
-  the archive's bytes. Whether an absolute path, a `..` component or a link
-  out of a directory is acceptable is the caller's to decide. So is writing
-  members to a filesystem safely.
+  the archive's bytes. The caller decides whether an absolute path, a `..`
+  component or a link out of a directory is acceptable. The caller also
+  decides how to write members to a filesystem safely.
 - **Decompression.** ferrotape reads the bytes it is given. A decoder beneath
   it is outside this crate.
 
 If you are unsure which side of the line a finding falls on, report it
-privately and we will work it out.
+privately, and the maintainers will work it out with you.
 
 ## Supported versions
 
 Security fixes are made to the newest release, and published as a release of
-their own; earlier releases are not patched, so receiving a fix means
+their own. Earlier releases are not patched, so receiving a fix means
 upgrading to the newest release. While the major version is 0, a fix that
-breaks compatibility with the public API is published as a new minor version,
-such as 0.2.0 after 0.1.x, and any other as a new patch version.
+breaks compatibility with the public API is published as a new minor version
+(such as 0.2.0 after 0.1.x). Any other fix is published as a new patch
+version.

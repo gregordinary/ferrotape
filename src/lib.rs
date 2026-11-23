@@ -1,14 +1,15 @@
-//! A tape archive reader and header writer, in safe Rust.
+//! A tape archive (tar) reader and header writer for untrusted input, in safe
+//! Rust.
 //!
-//! ferrotape is in early development, and its API is not yet stable.
+//! ferrotape is in early development. Its API is not yet stable.
 //!
-//! Its scope is the tar formats in use: POSIX ustar and pax, GNU, and
-//! pre-POSIX v7. The reader takes archives from sources its caller does not
-//! control. It reads an archive as GNU tar, bsdtar, Go's `archive/tar` and
-//! Python's `tarfile` read it, and refuses one they read differently. The
-//! writer encodes ustar headers, preceded by pax records for what ustar cannot
-//! hold. ferrotape parses and serializes, and never touches a filesystem. It
-//! contains no `unsafe` code and has no dependencies.
+//! It reads the tar formats in use: POSIX ustar and pax, GNU, and pre-POSIX
+//! v7. It reads an archive as GNU tar, bsdtar, Go's `archive/tar` and
+//! Python's `tarfile` read it, and refuses one they read differently.
+//! [`Level::Compatible`] states the one exception. The writer encodes ustar
+//! headers, preceded by pax records for what ustar cannot hold. ferrotape
+//! parses and serializes. It never touches a filesystem, and has no `unsafe`
+//! code and no dependencies.
 //!
 //! # Reading
 //!
@@ -33,16 +34,16 @@
 //! A refused archive fails with an [`Error`], whose [`ErrorKind`] names the
 //! rule the archive breaks and whose offset says where. Where the reader
 //! refuses an archive that some other reader reads, the kind's documentation
-//! says what the readers disagree about, and [`differences`] lists every kind
-//! of archive on which ferrotape reads otherwise than one of the four. Every
+//! says what the readers disagree about. [`differences`] lists every kind of
+//! archive on which ferrotape reads otherwise than one of the four. Every
 //! allocation an archive can drive has a ceiling: the [`Limits`] set on the
 //! reader, and the limit a caller passes to [`Reader::read_entry`] and
 //! [`Reader::finish`].
 //!
 //! # A destination of the caller's
 //!
-//! What a member becomes is the caller's to decide: a file on disk, an object
-//! in a store, an entry in an in-memory filesystem. Here the regular files go
+//! The caller decides what a member becomes: a file on disk, an object in a
+//! store, an entry in an in-memory filesystem. Here the regular files go
 //! into a map, and paths that would leave a directory are refused:
 //!
 //! ```
@@ -121,9 +122,9 @@
 //!
 //! A sparse member stands for a file with holes, as GNU tar writes one with
 //! `--sparse` and bsdtar by default. [`Reader::data`] delivers that file,
-//! the holes as zeros, and [`Entry::size`] is its size, which can be far
-//! more than the archive holds: up to 2<sup>60</sup> - 1 bytes. A caller that
-//! copies data to a file checks the size first, or writes the holes as holes:
+//! the holes as zeros. [`Entry::size`] is its size, which can be far more
+//! than the archive holds: up to 2<sup>60</sup> - 1 bytes. A caller that
+//! copies data to a file checks the size first, or writes the holes as holes.
 //! [`Entry::sparse`] gives the map, and [`Reader::stored_data`] the stored
 //! regions alone, each to be placed at its offset.
 //!
@@ -183,9 +184,10 @@
 //! # Ok::<(), ferrotape::Error>(())
 //! ```
 //!
-//! A source that can seek, a file, can be read with [`Reader::seeking`],
-//! which passes over the data the caller does not read rather than reading
-//! it, and [`Entry::data_offset`] says where each member's data lies.
+//! A source that can seek, such as a file, can be read with
+//! [`Reader::seeking`]. It passes over the data the caller does not read,
+//! rather than reading it. [`Entry::data_offset`] says where each member's
+//! data lies.
 //!
 //! # Writing
 //!
@@ -218,16 +220,15 @@
 //! ([`ErrorKind::SpecialBitsWithAcl`]). The writer writes such a member as GNU
 //! tar does.
 //!
-//! Paths, link targets and owner names are the archive's bytes. Whether a
-//! path is acceptable, an absolute one or one with a `..` component, is the
-//! caller's to decide, as is everything about writing members to a
-//! filesystem.
+//! Paths, link targets and owner names are the archive's bytes. The caller
+//! decides which paths are acceptable (an absolute one, or one with a `..`
+//! component), and everything about writing members to a filesystem.
 
 // Archives come from sources the caller does not control, so a panic in library
 // code is a decision made where the code is written rather than a finding a
 // fuzzer reports later. Each lint below names a way to panic, or to compute a
-// wrong length silently; a site that genuinely cannot fail and is clearer
-// written directly carries `#[expect(..., reason = "...")]` on the smallest
+// wrong length silently. A site that genuinely cannot fail and is clearer
+// written directly has `#[expect(..., reason = "...")]` on the smallest
 // item that holds it, with the reason stating the invariant. Tests are exempt:
 // there a panic is how a check fails.
 #![cfg_attr(
