@@ -84,8 +84,9 @@ pub(crate) struct Fields {
     /// name without adding one.
     pub(crate) prefix_slash: bool,
     /// Whether a header holds an owner name, or a device's number other than
-    /// 0, where its magic and version are neither POSIX's nor GNU's exactly. The readers read those fields from some such headers and not
-    /// from others.
+    /// 0, where its magic and version are neither POSIX's nor GNU's exactly.
+    /// The readers read those fields from some such headers and not from
+    /// others.
     pub(crate) unknown_magic: bool,
     /// Whether the magic and version are exactly POSIX's, `ustar\0` and
     /// `00`, or GNU's, `ustar ` and ` \0`.

@@ -265,8 +265,9 @@ impl<R: Read> Reader<R> {
     /// its data skipped. Nothing after the archive's end is part of the
     /// archive, but the stream it is read from can go on. The rest of the last
     /// record is padding. A compressed stream closes with the check over what
-    /// it decoded, which covers the end marker and the members before it. Stopping at the marker leaves that check unread. Reading on
-    /// to the end of the stream has the decoder beneath compare it.
+    /// it decoded, which covers the end marker and the members before it.
+    /// Stopping at the marker leaves that check unread. Reading on to the end
+    /// of the stream has the decoder beneath compare it.
     ///
     /// At [`Level::Strict`], what follows the end must be zeros
     /// ([`ErrorKind::TrailingData`]): GNU tar with `--ignore-zeros` reads
