@@ -23,6 +23,11 @@ const LIBARCHIVE_XATTR: &[u8] = b"LIBARCHIVE.xattr.";
 /// The standard base64 alphabet (RFC 4648, section 4).
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/// The longest global `path`, `linkpath`, `uname` or `gname` value
+/// [`GlobalHeaders::Apply`] reads, in bytes: Linux's `PATH_MAX` of 4,096,
+/// less its terminating NUL.
+const GLOBAL_VALUE_LIMIT: usize = 4095;
+
 /// The prefix of the keywords that describe a pax sparse member.
 const SPARSE: &[u8] = crate::sparse::PREFIX;
 
@@ -357,7 +362,22 @@ pub(crate) fn parse_global(
         );
         match mode {
             GlobalHeaders::Defer => {}
-            GlobalHeaders::Apply if applies => apply(&mut applied, keyword, value)?,
+            GlobalHeaders::Apply if applies => {
+                // Every member after the header holds a copy of a text value,
+                // so its length is held to the longest a path can be.
+                if let Some(
+                    known @ (Keyword::Path | Keyword::Linkpath | Keyword::Uname | Keyword::Gname),
+                ) = Keyword::of(keyword)
+                    && value.len() > GLOBAL_VALUE_LIMIT
+                {
+                    return Err(ErrorKind::GlobalValueLimit {
+                        keyword: known,
+                        size: value.len() as u64,
+                        limit: GLOBAL_VALUE_LIMIT as u64,
+                    });
+                }
+                apply(&mut applied, keyword, value)?;
+            }
             GlobalHeaders::Refuse | GlobalHeaders::Apply if keyword == b"comment" => {}
             GlobalHeaders::Refuse | GlobalHeaders::Apply => {
                 return Err(ErrorKind::GlobalRecord {

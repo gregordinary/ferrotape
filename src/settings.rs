@@ -133,6 +133,11 @@ pub enum GlobalHeaders {
     /// set a member's field is refused too. GNU tar replaces the earlier
     /// header's records, and Python merges the two. For a program that stands in for
     /// GNU tar or Python.
+    ///
+    /// Each member holds a copy of the global `path`, `linkpath`, `uname` and
+    /// `gname` it takes. So a value longer than 4,095 bytes is refused
+    /// ([`ErrorKind::GlobalValueLimit`](crate::ErrorKind::GlobalValueLimit)),
+    /// which holds the copy to a few times what a member's own header costs.
     Apply,
     /// No global header's records apply to any member, which is read from
     /// its own headers alone, as Go reads it. The records reach the caller,

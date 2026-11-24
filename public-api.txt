@@ -50,6 +50,10 @@ pub ferrotape::ErrorKind::FractionBeforeEpoch::keyword: ferrotape::Keyword
 pub ferrotape::ErrorKind::GlobalBetweenMetadata
 pub ferrotape::ErrorKind::GlobalRecord
 pub ferrotape::ErrorKind::GlobalRecord::keyword: alloc::vec::Vec<u8>
+pub ferrotape::ErrorKind::GlobalValueLimit
+pub ferrotape::ErrorKind::GlobalValueLimit::keyword: ferrotape::Keyword
+pub ferrotape::ErrorKind::GlobalValueLimit::limit: u64
+pub ferrotape::ErrorKind::GlobalValueLimit::size: u64
 pub ferrotape::ErrorKind::HardLinkWithoutTarget
 pub ferrotape::ErrorKind::HeaderField
 pub ferrotape::ErrorKind::HeaderField::field: ferrotape::HeaderField

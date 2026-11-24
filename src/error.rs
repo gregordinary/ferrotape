@@ -563,6 +563,18 @@ pub enum ErrorKind {
         /// The limit, in bytes.
         limit: u64,
     },
+    /// With [`GlobalHeaders::Apply`](crate::GlobalHeaders::Apply), a global
+    /// `path`, `linkpath`, `uname` or `gname` record holds a value longer than
+    /// 4,095 bytes. Each member after the header would hold a copy of it.
+    /// Linux's `PATH_MAX` is 4,096 bytes, its terminating NUL included.
+    GlobalValueLimit {
+        /// The record's keyword.
+        keyword: Keyword,
+        /// The value's length, in bytes.
+        size: u64,
+        /// The longest value read, in bytes.
+        limit: u64,
+    },
     /// The member [`Reader::read_entry`](crate::Reader::read_entry) was asked
     /// to read whole holds more than the limit it was given. Nothing of it has
     /// been read, so the reader can go on to the next member.
@@ -769,6 +781,15 @@ impl fmt::Display for ErrorKind {
             ErrorKind::MetadataLimit { size, limit } => write!(
                 f,
                 "a metadata member of {size} bytes is more than the {limit} accepted",
+            ),
+            ErrorKind::GlobalValueLimit {
+                keyword,
+                size,
+                limit,
+            } => write!(
+                f,
+                "a global `{keyword}` record of {size} bytes is more than the {limit} applied to \
+                 every member",
             ),
             ErrorKind::EntryLimit { size, limit } => write!(
                 f,

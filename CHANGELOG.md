@@ -53,7 +53,9 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   apart.
 - `GlobalHeaders`, set with `Reader::with_global_headers`: what is done with a
   global extended header holding any record but `comment`. `Refuse`, the
-  default, refuses it. `Apply` applies it as GNU tar and Python do. `Defer`
+  default, refuses it. `Apply` applies it as GNU tar and Python do. Every
+  member would hold a copy of a global `path`, `linkpath`, `uname` or
+  `gname`, so `Apply` refuses one longer than 4,095 bytes. `Defer`
   applies nothing, as Go reads it, and bsdtar before libarchive 3.8.10. In
   every mode its records reach the caller once: on the member after it
   (`Entry::global`), or after the last member (`Reader::trailing_global`).

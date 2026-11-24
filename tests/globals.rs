@@ -96,6 +96,52 @@ fn a_global_header_setting_any_other_record_is_refused() {
 }
 
 #[test]
+fn apply_holds_a_global_value_to_4095_bytes() {
+    // Every member after the header holds a copy of the value, so a long one
+    // costs that much again for each member of 512 bytes. Linux's `PATH_MAX`
+    // is 4,096 bytes with its terminating NUL.
+    let archive = |keyword: &[u8], length: usize| {
+        Tar::new()
+            .pax(b'g', &pax_record(keyword, &vec![b'n'; length]))
+            .file("a", b"x")
+            .file("b", b"y")
+            .finish()
+    };
+    for (keyword, known) in [
+        (&b"path"[..], Keyword::Path),
+        (b"linkpath", Keyword::Linkpath),
+        (b"uname", Keyword::Uname),
+        (b"gname", Keyword::Gname),
+    ] {
+        let read = members(&archive(keyword, 4095), GlobalHeaders::Apply).unwrap();
+        assert_eq!(read.len(), 2, "{}", keyword.escape_ascii());
+        let err = members(&archive(keyword, 4096), GlobalHeaders::Apply).unwrap_err();
+        assert_eq!(
+            (err.kind(), err.offset()),
+            (
+                &ErrorKind::GlobalValueLimit {
+                    keyword: known,
+                    size: 4096,
+                    limit: 4095,
+                },
+                0,
+            ),
+            "{}",
+            keyword.escape_ascii(),
+        );
+        // Defer copies nothing, and reads it.
+        assert!(members(&archive(keyword, 4096), GlobalHeaders::Defer).is_ok());
+    }
+    assert_eq!(
+        members(&archive(b"path", 4096), GlobalHeaders::Apply)
+            .unwrap_err()
+            .to_string(),
+        "a global `path` record of 4096 bytes is more than the 4095 applied to every member \
+         at offset 0",
+    );
+}
+
+#[test]
 fn a_global_header_does_not_fall_between_metadata_and_its_member() {
     // Go lets a global header consume an extended header or a long name
     // waiting for its member, which GNU tar, bsdtar and Python apply to the
