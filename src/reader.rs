@@ -122,6 +122,20 @@ impl<R: Read> Reader<R> {
         self.guarded(Reader::advance)
     }
 
+    /// The source.
+    pub fn get_ref(&self) -> &R {
+        &self.inner
+    }
+
+    /// The source, where the reader left it. The reader reads no further
+    /// than it has framed. After [`next_entry`](Self::next_entry), the source
+    /// stands at the member's data, [`Entry::data_offset`] bytes from where
+    /// the reader began. Each read of the data moves it on. After
+    /// [`finish`](Self::finish), it stands at the stream's end.
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
+
     /// The current member's data, as a [`Read`] that ends where the data
     /// does.
     ///

@@ -500,6 +500,8 @@ pub fn ferrotape::Reader<R>::seeking(R) -> ferrotape::Reader<R>
 impl<R: std::io::Read> ferrotape::Reader<R>
 pub fn ferrotape::Reader<R>::data(&mut self) -> ferrotape::Data<'_, R>
 pub fn ferrotape::Reader<R>::finish(&mut self, u64) -> core::result::Result<(), ferrotape::Error>
+pub fn ferrotape::Reader<R>::get_ref(&self) -> &R
+pub fn ferrotape::Reader<R>::into_inner(self) -> R
 pub fn ferrotape::Reader<R>::new(R) -> ferrotape::Reader<R>
 pub fn ferrotape::Reader<R>::next_entry(&mut self) -> core::result::Result<core::option::Option<ferrotape::Entry>, ferrotape::Error>
 pub fn ferrotape::Reader<R>::read_entry(&mut self, u64) -> core::result::Result<alloc::vec::Vec<u8>, ferrotape::Error>

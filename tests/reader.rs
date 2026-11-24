@@ -528,6 +528,33 @@ fn a_source_s_failure_is_repeated_with_its_kind_and_message() {
 }
 
 #[test]
+fn the_source_is_left_where_the_reader_stopped() {
+    // The reader reads no further than it has framed: after a member, its
+    // source stands at the member's data, and past what of it was read.
+    let archive = Tar::new()
+        .pax(b'x', &pax_record(b"comment", b"c"))
+        .file("one", &[b'1'; 700])
+        .file("two", b"2")
+        .finish();
+    let mut reader = Reader::new(io::Cursor::new(&archive[..]));
+    assert_eq!(reader.get_ref().position(), 0);
+    let entry = reader.next_entry().unwrap().unwrap();
+    assert_eq!(reader.get_ref().position(), entry.data_offset());
+    reader.data().read_exact(&mut [0; 100]).unwrap();
+    assert_eq!(reader.get_ref().position(), entry.data_offset() + 100);
+    let next = reader.next_entry().unwrap().unwrap();
+    let source = reader.into_inner();
+    assert_eq!(source.position(), next.data_offset());
+
+    // After `finish`, at the stream's end, whatever follows the archive.
+    let mut followed = archive.clone();
+    followed.extend_from_slice(&[0; 3 * BLOCK]);
+    let mut reader = Reader::new(io::Cursor::new(&followed[..]));
+    reader.finish(1 << 20).unwrap();
+    assert_eq!(reader.into_inner().position(), followed.len() as u64);
+}
+
+#[test]
 fn an_archive_read_from_another_archives_member_reports_where_the_outer_one_fails() {
     // The inner archive's source is the outer archive's member, and the
     // outer archive ends inside it. The inner reader returns the outer

@@ -23,7 +23,9 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   its GNU long name, long link and pax records applied. `data` reads the
   member's data as a `Read`, and `read_entry` reads it whole under a caller's
   limit. `finish` reads the rest of the archive and, under a limit, the
-  stream after it, so a decoder beneath checks its trailer.
+  stream after it, so a decoder beneath checks its trailer. `get_ref` shows
+  the source, and `into_inner` returns it where the reader left it: the
+  reader reads no further than it has framed.
 - `Reader::seeking`, for a source that can seek: data the caller does not
   read is passed over by seeking, each seek held to the source's length.
 - `Decoder`, the reader without I/O, for a source a `Read` does not fit (an
