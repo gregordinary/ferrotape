@@ -1,0 +1,28 @@
+[statement]
+A POSIX header ending in star's trailer, `tar` and a NUL, whose prefix is 131
+bytes, the length of star's prefix field. Every reader joins the whole
+prefix to the name, and so does ferrotape.
+
+[archive]
+header name=f prefix="p"*131 @508="tar\x00"
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path="p"*131"/f" size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path="p"*131"/f" size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path="p"*131"/f" size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path="p"*131"/f" size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

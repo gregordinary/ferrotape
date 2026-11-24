@@ -73,6 +73,7 @@ pub ferrotape::ErrorKind::PaxValue::keyword: ferrotape::Keyword
 pub ferrotape::ErrorKind::PaxValue::problem: ferrotape::Numeric
 pub ferrotape::ErrorKind::PrefixArea
 pub ferrotape::ErrorKind::PrefixSlash
+pub ferrotape::ErrorKind::RealSizeRecord
 pub ferrotape::ErrorKind::RepeatedKeyword
 pub ferrotape::ErrorKind::RepeatedKeyword::keyword: alloc::vec::Vec<u8>
 pub ferrotape::ErrorKind::RepeatedMetadata(ferrotape::Metadata)
@@ -85,6 +86,7 @@ pub ferrotape::ErrorKind::SolarisExtendedHeader
 pub ferrotape::ErrorKind::Sparse(ferrotape::SparseFlaw)
 pub ferrotape::ErrorKind::SparseFields
 pub ferrotape::ErrorKind::SpecialBitsWithAcl
+pub ferrotape::ErrorKind::StarPrefix
 pub ferrotape::ErrorKind::TargetWithoutLink
 pub ferrotape::ErrorKind::TargetWithoutLink::kind: ferrotape::EntryKind
 pub ferrotape::ErrorKind::TrailingData
@@ -230,6 +232,8 @@ impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::Numeric
 impl core::panic::unwind_safe::UnwindSafe for ferrotape::Numeric
 #[non_exhaustive] pub enum ferrotape::PaxFraming
 pub ferrotape::PaxFraming::BadLength
+pub ferrotape::PaxFraming::BlankBeforeKeyword
+pub ferrotape::PaxFraming::EmptyKeyword
 pub ferrotape::PaxFraming::KeywordNul
 pub ferrotape::PaxFraming::LengthOutOfBounds
 pub ferrotape::PaxFraming::NoDelimiter

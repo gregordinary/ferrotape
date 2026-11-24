@@ -267,6 +267,143 @@ fn a_keyword_holding_a_nul_is_refused() {
 }
 
 #[test]
+fn a_real_size_record_other_than_a_file_s_size_is_refused() {
+    // bsdtar takes `SCHILY.realsize` as a file's size, and extracts that many
+    // bytes, where GNU tar, Go and Python ignore it.
+    let member = |records: &[u8], header: Header, data: &[u8]| {
+        Tar::new().pax(b'x', records).entry(header, data).finish()
+    };
+    for value in [&b"100000"[..], b"3", b"x", b"", b"+6", b" 6"] {
+        for typeflag in *b"07Z" {
+            let archive = member(
+                &pax_record(b"SCHILY.realsize", value),
+                Header::new("f", typeflag, 6),
+                b"hello\n",
+            );
+            for level in [Level::Strict, Level::Compatible] {
+                let err = Reader::new(&archive[..])
+                    .with_level(level)
+                    .next_entry()
+                    .unwrap_err();
+                assert_eq!(
+                    (err.kind(), err.offset()),
+                    (&ErrorKind::RealSizeRecord, 2 * BLOCK as u64),
+                    "{} {} {level:?}",
+                    value.escape_ascii(),
+                    char::from(typeflag),
+                );
+            }
+        }
+    }
+    // A hard link takes it as its size too.
+    let mut link = Header::new("h", b'1', 0);
+    link.link = b"f".to_vec();
+    let archive = Tar::new()
+        .file("f", b"x")
+        .pax(b'x', &pax_record(b"SCHILY.realsize", b"5"))
+        .header(&link)
+        .finish();
+    let mut reader = Reader::new(&archive[..]);
+    reader.next_entry().unwrap();
+    assert_eq!(
+        reader.next_entry().unwrap_err().kind(),
+        &ErrorKind::RealSizeRecord
+    );
+    // The member's own size is read, as are the kinds bsdtar ignores it on.
+    for value in [&b"6"[..], b"06"] {
+        let archive = member(
+            &pax_record(b"SCHILY.realsize", value),
+            Header::new("f", b'0', 6),
+            b"hello\n",
+        );
+        assert_eq!(first_at(&archive, Level::Strict).unwrap().size(), 6);
+    }
+    for (name, typeflag) in [("d/", b'5'), ("p", b'6'), ("c", b'3'), ("b", b'4')] {
+        let archive = member(
+            &pax_record(b"SCHILY.realsize", b"100000"),
+            Header::new(name, typeflag, 0),
+            b"",
+        );
+        assert!(first_at(&archive, Level::Strict).is_ok(), "{name}");
+    }
+    let mut symlink = Header::new("l", b'2', 0);
+    symlink.link = b"t".to_vec();
+    let archive = Tar::new()
+        .pax(b'x', &pax_record(b"SCHILY.realsize", b"100000"))
+        .header(&symlink)
+        .finish();
+    assert!(first_at(&archive, Level::Strict).is_ok());
+}
+
+#[test]
+fn a_keyword_beginning_with_a_space_or_a_tab_is_refused() {
+    // GNU tar passes over spaces and tabs after the length's space and applies
+    // the record by the keyword after them; bsdtar, Go and Python keep them,
+    // and apply nothing. `21  path=evil/passwd` names the member for GNU tar
+    // alone, and ` size=512` hides the member after it from GNU tar alone.
+    for keyword in [
+        &b" path"[..],
+        b"\tpath",
+        b" \tpath",
+        b" size",
+        b" SCHILY.xattr.user.k",
+    ] {
+        for level in [Level::Strict, Level::Compatible] {
+            let err = with_records_at(&pax_record(keyword, b"512"), level).unwrap_err();
+            assert_eq!(
+                (err.kind(), err.offset()),
+                (&ErrorKind::PaxFraming(PaxFraming::BlankBeforeKeyword), 0),
+                "{} {level:?}",
+                keyword.escape_ascii(),
+            );
+        }
+    }
+    // Every reader reads a blank after or inside a keyword, or any other
+    // byte before it, as part of a keyword none applies.
+    for keyword in [
+        &b"path "[..],
+        b"pa th",
+        b"path\t",
+        b"\npath",
+        b"\x0bpath",
+        b"\x0cpath",
+        b"\rpath",
+    ] {
+        let entry = with_records(&pax_record(keyword, b"evil")).unwrap();
+        assert_ne!(entry.path(), b"evil", "{}", keyword.escape_ascii());
+        assert_eq!(entry.pax_records().get(keyword), Some(&b"evil"[..]));
+    }
+}
+
+#[test]
+fn an_empty_keyword_is_refused() {
+    // GNU tar and bsdtar read on past the record. Python ends the archive at
+    // its member, having listed the members before it, and Go fails there.
+    let archive = Tar::new()
+        .file("one", b"1\n")
+        .pax(b'x', &pax_record(b"", b"x"))
+        .file("two", b"2\n")
+        .finish();
+    for level in [Level::Strict, Level::Compatible] {
+        let mut reader = Reader::new(&archive[..]).with_level(level);
+        assert_eq!(reader.next_entry().unwrap().unwrap().path(), b"one");
+        let err = reader.next_entry().unwrap_err();
+        assert_eq!(
+            (err.kind(), err.offset()),
+            (
+                &ErrorKind::PaxFraming(PaxFraming::EmptyKeyword),
+                2 * BLOCK as u64
+            ),
+            "{level:?}",
+        );
+    }
+    assert_eq!(
+        refusal(&pax_record(b"", b"x")).to_string(),
+        "a pax record's keyword is empty",
+    );
+}
+
+#[test]
 fn times_order_chronologically() {
     let at = |secs, nanos| Timestamp::new(secs, nanos).unwrap();
     // -1.5 seconds is the second -2 and half a second past it.
@@ -383,12 +520,15 @@ fn a_size_of_2_to_the_60_or_more_is_refused() {
 }
 
 #[test]
-fn a_path_or_link_target_holding_a_nul_is_refused() {
+fn a_name_link_target_or_owner_holding_a_nul_is_refused() {
     // A record's length, not a NUL, ends its value, and the readers disagree
-    // over what such a name names.
+    // over what such a name names: GNU tar and bsdtar cut it at the NUL,
+    // Python keeps it, and Go refuses the archive.
     for (keyword, known) in [
         (&b"path"[..], Keyword::Path),
         (b"linkpath", Keyword::Linkpath),
+        (b"uname", Keyword::Uname),
+        (b"gname", Keyword::Gname),
     ] {
         assert_eq!(
             refusal(&pax_record(keyword, b"abc\0def")),

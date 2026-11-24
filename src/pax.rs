@@ -599,8 +599,8 @@ fn apply(applied: &mut Applied, keyword: &[u8], value: &[u8]) -> Result<(), Erro
     match known {
         Keyword::Path => applied.path = Some(name(known, value)?),
         Keyword::Linkpath => applied.link_target = Some(name(known, value)?),
-        Keyword::Uname => applied.uname = Some(text(known, value)?),
-        Keyword::Gname => applied.gname = Some(text(known, value)?),
+        Keyword::Uname => applied.uname = Some(name(known, value)?),
+        Keyword::Gname => applied.gname = Some(name(known, value)?),
         Keyword::Size => {
             let size = decimal(value).map_err(number)?;
             // bsdtar stops at a member declaring 2^60 or more.
@@ -650,8 +650,8 @@ fn text(keyword: Keyword, value: &[u8]) -> Result<Vec<u8>, ErrorKind> {
     Ok(value.to_vec())
 }
 
-/// The value of a `path` or `linkpath` record: a [`text`] value holding no
-/// NUL.
+/// The value of a `path`, `linkpath`, `uname` or `gname` record: a [`text`]
+/// value holding no NUL.
 ///
 /// The record's length frames the value, so a NUL in it is part of the name
 /// rather than its end ([`ErrorKind::PaxNul`]).
@@ -739,7 +739,7 @@ fn before_epoch_with_fraction(value: &[u8]) -> bool {
 /// record's length decides where the next one begins, and a `size` decides
 /// where the next header does. A reader more lenient than the format
 /// therefore reads an archive differently from the tools that wrote it.
-fn decimal(text: &[u8]) -> Result<u64, Numeric> {
+pub(crate) fn decimal(text: &[u8]) -> Result<u64, Numeric> {
     if text.is_empty() || !text.iter().all(u8::is_ascii_digit) {
         return Err(Numeric::Unreadable);
     }
@@ -803,10 +803,21 @@ fn split_record(rest: &[u8]) -> Result<(Record<'_>, &[u8]), PaxFraming> {
     };
     let line = line.strip_suffix(b"\n").ok_or(PaxFraming::NoNewline)?;
     let field = split_once(line, b'=').ok_or(PaxFraming::NoEquals)?;
+    let keyword = field.0;
     // GNU tar and bsdtar read a keyword as a C string, ending at a NUL, and
     // Go refuses the archive, so a NUL frames the record differently for each.
-    if field.0.contains(&0) {
+    if keyword.contains(&0) {
         return Err(PaxFraming::KeywordNul);
+    }
+    // Python ends the archive at an empty keyword, where GNU tar and bsdtar
+    // read on.
+    if keyword.is_empty() {
+        return Err(PaxFraming::EmptyKeyword);
+    }
+    // GNU tar passes over spaces and tabs before a keyword, and the others
+    // keep them, so `21  path=x` names the member for GNU tar alone.
+    if matches!(keyword.first(), Some(b' ' | b'\t')) {
+        return Err(PaxFraming::BlankBeforeKeyword);
     }
     Ok((field, after))
 }

@@ -1,0 +1,28 @@
+[statement]
+A pax `uname` record holding a NUL: `root`, a NUL, `evil`. GNU tar and bsdtar
+cut the name at the NUL, Python keeps it, and Go refuses the archive.
+ferrotape refuses it.
+
+[archive]
+pax uname="root\0evil"
+header name=f
+data "hello\n"
+end
+
+[verdict]
+all: refused PaxNul at 0
+
+[gnu-tar 1.35]
+member listed=- path=f size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=6 mode=0o644 mtime=0 uid=0 gid=0 uname="root\0evil" gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+error "archive/tar: invalid tar header"

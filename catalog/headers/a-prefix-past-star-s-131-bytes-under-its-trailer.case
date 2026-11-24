@@ -1,0 +1,30 @@
+[statement]
+A POSIX header ending in star's trailer, `tar` and a NUL, whose prefix is 131
+bytes and then the octal digits star writes for an access time. Go reads
+the header in star's format, its prefix the first 131 bytes. GNU tar, bsdtar
+and Python join the whole prefix, digits included, to the name. ferrotape
+refuses the archive.
+
+[archive]
+header name=f prefix="p"*131"00000000001" @508="tar\x00"
+data "hello\n"
+end
+
+[verdict]
+all: refused StarPrefix at 0
+
+[gnu-tar 1.35]
+member listed=- path="p"*131"00000000001/f" size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path="p"*131"00000000001/f" size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path="p"*131"00000000001/f" size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path="p"*131"/f" size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

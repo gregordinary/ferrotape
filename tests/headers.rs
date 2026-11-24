@@ -26,13 +26,161 @@ fn octal_fields_read_as_writers_pad_them() {
         (&b"0000755\0"[..], 0o755),
         (b"   755 \0", 0o755),
         (b"0000755 ", 0o755),
-        // A field of blanks or NULs alone is zero, as GNU tar reads one.
-        (b"        ", 0),
+        // A field of NULs alone, or of spaces ending in a NUL, is zero to
+        // every reader.
         (b"\0\0\0\0\0\0\0\0", 0),
+        (b"       \0", 0),
+        (b"  \0 0644", 0),
     ] {
         let entry = read(&with_field(100..108, spelled)).unwrap();
         assert_eq!(entry.mode(), mode, "{spelled:?}");
     }
+}
+
+#[test]
+fn a_blank_field_is_refused() {
+    // GNU tar reads a field of spaces as all bits set and reports it, where
+    // the others read zero. After a leading NUL, GNU tar and Go read the
+    // digits that follow, and bsdtar and Python read zero.
+    let fields = [
+        (100..108, HeaderField::Mode),
+        (108..116, HeaderField::Uid),
+        (116..124, HeaderField::Gid),
+        (124..136, HeaderField::Size),
+        (136..148, HeaderField::Mtime),
+    ];
+    for (range, field) in fields {
+        let width = range.len();
+        let mut spaces = vec![b' '; width];
+        let mut nul_then_digits = vec![b'0'; width];
+        nul_then_digits[0] = 0;
+        let mut nul_then_spaces = vec![b' '; width];
+        nul_then_spaces[0] = 0;
+        let mut nul_then_one = vec![0; width];
+        nul_then_one[width - 1] = b'1';
+        for spelled in [
+            &mut spaces,
+            &mut nul_then_digits,
+            &mut nul_then_spaces,
+            &mut nul_then_one,
+        ] {
+            let err = read(&with_field(range.clone(), spelled)).unwrap_err();
+            assert_eq!(
+                err.kind(),
+                &ErrorKind::HeaderField {
+                    field,
+                    problem: Numeric::Unreadable,
+                },
+                "{field:?} {spelled:?}",
+            );
+        }
+    }
+}
+
+#[test]
+fn a_blank_device_number_is_refused_on_a_device_alone() {
+    // GNU tar reads the device fields of a device alone: on any other member
+    // every reader reads a blank one as zero.
+    for (range, field) in [
+        (329..337, HeaderField::DevMajor),
+        (337..345, HeaderField::DevMinor),
+    ] {
+        for spelled in [&b"        "[..], b"\x000000005"] {
+            for typeflag in *b"34" {
+                let mut block = Header::new("dev", typeflag, 0).block();
+                block[range.clone()].copy_from_slice(spelled);
+                seal(&mut block);
+                let err = read(&block).unwrap_err();
+                assert_eq!(
+                    err.kind(),
+                    &ErrorKind::HeaderField {
+                        field,
+                        problem: Numeric::Unreadable,
+                    },
+                    "{spelled:?} {}",
+                    char::from(typeflag),
+                );
+            }
+            for typeflag in *b"056" {
+                let mut block = Header::new("member", typeflag, 0).block();
+                block[range.clone()].copy_from_slice(spelled);
+                seal(&mut block);
+                let entry = read(&block).unwrap();
+                assert_eq!(entry.device(), None, "{spelled:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_checksum_in_base256_is_refused() {
+    // GNU tar and bsdtar pass over such a header and read the next block as
+    // one, where Python reads it: here, a setuid member's header hidden in
+    // the member's data.
+    let mut block = Header::new("cover", b'0', BLOCK as u64).block();
+    block[148..156].fill(b' ');
+    let sum: u64 = block.iter().map(|byte| u64::from(*byte)).sum();
+    block[148] = 0x80;
+    block[149..156].copy_from_slice(&sum.to_be_bytes()[1..]);
+    let mut hidden = Header::new("hidden-setuid", b'0', 0);
+    hidden.mode = 0o4755;
+    let hidden = hidden.block();
+    let archive = Tar::new().block(&block).block(&hidden).finish();
+    let err = first(&archive).unwrap_err();
+    assert_eq!((err.kind(), err.offset()), (&ErrorKind::Checksum, 0));
+    // The same sum in octal is read.
+    let mut octal_sum = block;
+    seal(&mut octal_sum);
+    assert_eq!(
+        first(&Tar::new().block(&octal_sum).block(&hidden).finish())
+            .unwrap()
+            .path(),
+        b"cover"
+    );
+}
+
+#[test]
+fn a_prefix_longer_than_stars_under_its_trailer_is_refused() {
+    // Go reads a POSIX header ending in `tar\0` as star's, its prefix the
+    // first 131 bytes; GNU tar, bsdtar and Python join the whole prefix.
+    let header = |prefix: &[u8], trailer: bool| {
+        let mut block = Header::new("f", b'0', 0).block();
+        block[345..345 + prefix.len()].copy_from_slice(prefix);
+        if trailer {
+            block[508..512].copy_from_slice(b"tar\0");
+        }
+        seal(&mut block);
+        block
+    };
+    let long = [b'p'; 140];
+    for level in [Level::Strict, Level::Compatible] {
+        let err = Reader::new(&Tar::new().block(&header(&long, true)).finish()[..])
+            .with_level(level)
+            .next_entry()
+            .unwrap_err();
+        assert_eq!(
+            (err.kind(), err.offset()),
+            (&ErrorKind::StarPrefix, 0),
+            "{level:?}"
+        );
+    }
+    // star's times after a prefix of 131 bytes run the prefix on for the
+    // readers that do not read star's format.
+    let mut times = [b'p'; 155];
+    times[131..143].copy_from_slice(b"00000000001\0");
+    let err = first(&Tar::new().block(&header(&times[..143], true)).finish()).unwrap_err();
+    assert_eq!(err.kind(), &ErrorKind::StarPrefix);
+    // A prefix star's field holds, or a long one without the trailer, is read.
+    let entry = first(&Tar::new().block(&header(&long[..131], true)).finish()).unwrap();
+    assert_eq!(entry.path().len(), 133);
+    let entry = first(&Tar::new().block(&header(&long, false)).finish()).unwrap();
+    assert_eq!(entry.path().len(), 142);
+    // A pax `path` replaces the prefix for every reader.
+    let archive = Tar::new()
+        .pax(b'x', &pax_record(b"path", b"named"))
+        .block(&header(&long, true))
+        .finish();
+    assert_eq!(first(&archive).unwrap().path(), b"named");
 }
 
 #[test]

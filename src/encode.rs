@@ -656,17 +656,20 @@ fn pax_time(time: Timestamp) -> String {
 
 /// Whether `keyword` can be written as a record's keyword. It is not empty,
 /// and holds no `=`, which ends a keyword. It holds no NUL either, which ends
-/// one for GNU tar and bsdtar and which Go refuses. A record's length frames it, so a newline
-/// is read alike by every reader.
+/// one for GNU tar and bsdtar and which Go refuses. It does not begin with a
+/// space or a tab, which GNU tar passes over and the others keep. A record's
+/// length frames it, so a newline is read alike by every reader.
 fn writable_keyword(keyword: &[u8]) -> bool {
-    !keyword.is_empty() && !keyword.iter().any(|byte| matches!(byte, b'=' | 0))
+    !keyword.is_empty()
+        && !matches!(keyword.first(), Some(b' ' | b'\t'))
+        && !keyword.iter().any(|byte| matches!(byte, b'=' | 0))
 }
 
 /// Whether `keyword` is one a caller's record may not use. The writer derives
 /// such a keyword from the header's fields, or the readers apply it to a
 /// member in ways that differ.
 fn reserved(keyword: &[u8]) -> bool {
-    const FIELDS: [&[u8]; 13] = [
+    const FIELDS: [&[u8]; 14] = [
         b"path",
         b"linkpath",
         b"size",
@@ -680,9 +683,10 @@ fn reserved(keyword: &[u8]) -> bool {
         b"hdrcharset",
         b"SCHILY.devmajor",
         b"SCHILY.devminor",
+        b"SCHILY.realsize",
     ];
-    // The fields, and bsdtar's device numbers, which the other readers do not
-    // apply; extended attributes, which `add_xattr` writes; bsdtar's second
+    // The fields, and bsdtar's device numbers and real size, which the other
+    // readers do not apply; extended attributes, which `add_xattr` writes; bsdtar's second
     // spelling of them, and SELinux's, which readers apply differently; and
     // GNU's sparse, volume and dump records.
     const PREFIXES: [&[u8]; 4] = [b"SCHILY.xattr.", b"LIBARCHIVE.xattr.", b"RHT.", b"GNU."];
@@ -776,8 +780,8 @@ pub enum HeaderError {
         /// The name.
         name: Vec<u8>,
     },
-    /// A record's keyword cannot be written: it is empty, or holds `=` or a
-    /// NUL.
+    /// A record's keyword cannot be written: it is empty, begins with a space
+    /// or a tab, or holds `=` or a NUL.
     Keyword {
         /// The keyword.
         keyword: Vec<u8>,
@@ -786,7 +790,8 @@ pub enum HeaderError {
     /// header's fields (`path`, `size`, `mtime` and the like, and
     /// `SCHILY.xattr.` records, which [`Header::add_xattr`] writes), or the
     /// readers apply it to the member in ways that differ (`SCHILY.devmajor`,
-    /// `SCHILY.devminor`, `LIBARCHIVE.xattr.`, `RHT.`, `GNU.`).
+    /// `SCHILY.devminor`, `SCHILY.realsize`, `LIBARCHIVE.xattr.`, `RHT.`,
+    /// `GNU.`).
     ReservedKeyword {
         /// The keyword.
         keyword: Vec<u8>,

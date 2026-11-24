@@ -1,0 +1,35 @@
+[statement]
+A pax `SCHILY.realsize` record of 100000 on a hard link. bsdtar lists it as
+a regular file of 100000 bytes. GNU tar, Python and Go ignore the record.
+ferrotape refuses the archive at the link.
+
+[archive]
+header name=t
+data "x"
+pax SCHILY.realsize=100000
+header name=h typeflag=1 linkname=t
+end
+
+[verdict]
+all: refused RealSizeRecord at 2048
+
+[gnu-tar 1.35]
+member listed=- path=t size=1 mode=0o644 data="x"
+member listed=h path=h link=t size=0 mode=0o644
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.realsize'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=t size=1 mode=0o644
+member listed=- path=h link=t size=100000 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=t size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=1 path=h link=t size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root
+ok
+
+[go 1.27.0]
+member type=0 path=t size=1 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+member type=1 path=h link=t size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

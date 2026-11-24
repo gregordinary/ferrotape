@@ -11,7 +11,7 @@ mod support;
 use std::io::{Cursor, Read};
 
 use ferrotape::{Entry, ErrorKind, Level, Limits, Reader, Region, SparseFlaw};
-use support::{BLOCK, Header, Magic, Tar, pax_records, read_whole, seal};
+use support::{BLOCK, Header, Magic, Tar, pax_record, pax_records, read_whole, seal};
 
 /// Twelve bytes of GNU's octal form: eleven digits and a NUL.
 fn octal12(value: u64) -> [u8; 12] {
@@ -873,6 +873,30 @@ fn sparse_records_belong_on_a_regular_member_s_own_header() {
             "{mode:?}"
         );
     }
+}
+
+#[test]
+fn a_real_size_record_on_a_sparse_member_is_read() {
+    // Every reader takes a sparse member's real size from its map, and
+    // ignores `SCHILY.realsize` there, bsdtar included.
+    let data = stored(&REGIONS);
+    let archive = Tar::new()
+        .pax(b'x', &pax_record(b"SCHILY.realsize", b"100000"))
+        .block(&old_header(
+            "sparse",
+            &REGIONS,
+            REAL,
+            data.len() as u64,
+            false,
+        ))
+        .body(&data)
+        .file("after", b"tail")
+        .finish();
+    let (entry, file_data, next) = read_first(&archive, Level::Strict).unwrap();
+    assert_eq!(
+        (entry.size(), file_data, next),
+        (REAL, file(&REGIONS, REAL), b"after".to_vec())
+    );
 }
 
 #[test]

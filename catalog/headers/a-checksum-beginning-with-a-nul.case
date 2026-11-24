@@ -1,0 +1,28 @@
+[statement]
+A member whose checksum field holds a NUL, then the right sum in six octal
+digits and a space. GNU tar and Go read the member. bsdtar does not
+recognize the archive, and Python refuses it for its checksum. ferrotape
+refuses it.
+
+[archive]
+header name=f checksum="\x00###### "
+data "hello\n"
+end
+
+[verdict]
+all: refused Checksum at 0
+
+[gnu-tar 1.35]
+member listed=- path=f size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+error "ReadError: bad checksum"
+
+[go 1.27.0]
+member type=0 path=f size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

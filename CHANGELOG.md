@@ -106,16 +106,22 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
 Each refusal has an `ErrorKind`. A stream that is no archive at all is
 `ErrorKind::NotATar`, told apart from a damaged one. The reader refuses:
 
-- A header that fails its checksum.
+- A header that fails its checksum. The checksum is octal: GNU tar and bsdtar
+  pass over a header whose sum is in base-256, which Python reads.
 - A numeric field that does not read, or reads negative where it cannot be,
   the device numbers of every header included, whatever its magic. A field
-  holding digits, then a space and more digits, does not read.
+  holding digits, then a space and more digits, does not read. Nor does a
+  field of spaces alone, or one beginning with a NUL and holding anything
+  else. GNU tar reads those otherwise than the others. GNU tar reads
+  device numbers only for a device, so only a device's are held to this.
 - A declared size of 2^60 or more, in a header or a pax record.
-- A pax record that does not frame, a keyword holding a NUL included.
+- A pax record that does not frame, a keyword that is empty, holds a NUL, or
+  begins with a space or a tab included. GNU tar passes over the space or
+  tab, and applies the record that the others do not.
 - A pax record the reader applies whose value is a number in any form but
   decimal digits, or an id above 2^32 - 1.
-- An empty pax `path`, `linkpath`, `uname` or `gname`, or a NUL in `path` or
-  `linkpath`.
+- An empty pax `path`, `linkpath`, `uname` or `gname`, or a NUL in any of
+  them.
 - An empty or unreadable pax time, or a time before 1970 with a fraction of a
   second.
 - A second metadata member of one kind before a member.
@@ -142,6 +148,8 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 - A header with an owner name, or a device's number other than 0, whose
   magic and version are neither POSIX's nor GNU's exactly.
 - A POSIX header that names its member with a prefix ending in `/`.
+- A POSIX header ending in star's trailer that names its member with a
+  prefix longer than star's 131 bytes.
 - A member with an empty name.
 - A member named as a directory that declares data, or that has a pax record
   other than those the reader applies, `comment` and `hdrcharset`.
@@ -151,6 +159,8 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 - A member that is not a directory with a default access control list
   (`SCHILY.acl.default`).
 - A hard link with no target, or that declares a size.
+- A file or a hard link that is not sparse with a `SCHILY.realsize` record
+  other than its size, which bsdtar takes as the size.
 - A symbolic link, directory, device or FIFO whose size a pax record
   declares.
 - A sparse member whose map takes a shape the readers extract otherwise.
@@ -172,15 +182,15 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 
 ### Agreement with the reference readers
 
-- The case catalog's 242 archives. In each of the six settings, ferrotape
+- The case catalog's 264 archives. In each of the six settings, ferrotape
   gives every case its stated verdict. Wherever it reads one, it reads the
   members the readers that setting stands in for read.
 - 10,000 archives made by changing the catalog's one to three ways (9,039
-  distinct, 2,354 of them read by ferrotape in some setting). None is read
+  distinct, 2,351 of them read by ferrotape in some setting). None is read
   otherwise than by the readers its setting stands in for.
-- 4,362 tar streams in 3,996 published archives (Alpine, Debian and Gentoo
+- 4,360 tar streams in 3,994 published archives (Alpine, Debian and Gentoo
   packages and root filesystems, crates, npm packages, Python sdists,
-  Homebrew bottles, container image layers, and release tarballs), 764,771
+  Homebrew bottles, container image layers, and release tarballs), 764,470
   members: every stream read at both levels and in every global-header mode,
   none refused.
 - 618 members written by `Writer`, at each field's limits and generated: GNU

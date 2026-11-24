@@ -32,6 +32,10 @@ const GNU_MAGIC: &[u8] = b"ustar  \0";
 /// POSIX's magic and version, which a pax sparse member's header holds.
 const POSIX_MAGIC: &[u8] = b"ustar\x0000";
 
+/// star's record of a file's real size, which bsdtar reads as the size of a
+/// member that is not sparse.
+const REAL_SIZE: &[u8] = b"SCHILY.realsize";
+
 /// What the driver does next.
 #[derive(Debug)]
 // The lint's threshold is in bytes, and a member's size follows the
@@ -492,6 +496,11 @@ impl Parser {
         if header.prefix_slash && named_by_header {
             return Err(refuse(ErrorKind::PrefixSlash));
         }
+        // Go reads a header ending in star's trailer as star's, its prefix
+        // the first 131 bytes.
+        if header.star_prefix && named_by_header {
+            return Err(refuse(ErrorKind::StarPrefix));
+        }
 
         // A trailing separator marks a directory, whatever the regular file's
         // typeflag says, as in the oldest archives. It is read from the
@@ -501,6 +510,22 @@ impl Parser {
         // separator, a rule read from the field would make a regular file a
         // directory, and read its data as the next header.
         let kind = EntryKind::of(header.typeflag, &path);
+        // bsdtar takes a `SCHILY.realsize` record as the size of a file or a
+        // hard link, where the others ignore it. Every reader takes a sparse
+        // member's real size from its map, and ignores the record on any
+        // other kind of member.
+        if matches!(kind, EntryKind::File | EntryKind::HardLink)
+            && !old_sparse
+            && pax_sparse.is_none()
+        {
+            let states_size = |value: &[u8]| pax::decimal(value) == Ok(declared_size);
+            if records
+                .iter()
+                .any(|(keyword, value)| keyword == REAL_SIZE && !states_size(value))
+            {
+                return Err(refuse(ErrorKind::RealSizeRecord));
+            }
+        }
         // bsdtar takes a trailing separator to mark a directory whatever the
         // typeflag, where GNU tar and Python extract a typeflag GNU tar does
         // not know as a regular file.

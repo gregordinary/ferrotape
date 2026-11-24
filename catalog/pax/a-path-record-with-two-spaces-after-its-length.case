@@ -1,0 +1,30 @@
+[statement]
+A pax `path` record with a second space after its length:
+`21  path=evil/passwd`. GNU tar passes over the space and names the member
+`evil/passwd`. bsdtar, Python and Go read a keyword ` path`, which none
+applies, and name it `innocent`. ferrotape refuses the archive.
+
+[archive]
+pax " path"=evil/passwd
+header name=innocent
+data "hello\n"
+end
+
+[verdict]
+all: refused PaxFraming at 0
+
+[gnu-tar 1.35]
+member listed=- path=evil/passwd size=6 mode=0o644 data="hello\n"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=innocent size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=innocent size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=innocent size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

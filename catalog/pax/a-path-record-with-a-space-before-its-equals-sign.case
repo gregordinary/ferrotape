@@ -1,0 +1,30 @@
+[statement]
+A record whose keyword is `path` and a space, `path `. Every reader reads a
+keyword it does not apply, GNU tar with a warning, and names the member
+`innocent`, as ferrotape does.
+
+[archive]
+pax "path "=evil/passwd
+header name=innocent
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=innocent size=6 mode=0o644 data="hello\n"
+warning "tar: Ignoring unknown extended header keyword 'path '"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=innocent size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=innocent size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=0 path=innocent size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

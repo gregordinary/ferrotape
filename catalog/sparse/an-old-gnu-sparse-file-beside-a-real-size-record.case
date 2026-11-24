@@ -1,0 +1,30 @@
+[statement]
+An old GNU sparse member of real size 8192, one region of 6 bytes, with a
+pax `SCHILY.realsize` of 100000. Every reader takes the real size from the
+map, bsdtar included, and so does ferrotape.
+
+[archive]
+pax SCHILY.realsize=100000
+header name=s typeflag=S magic=gnu size=6 @386="00000000000\x0000000000006\x0000000020000\x0000000000000\x00" @483="00000020000\x00"
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=s size=8192 mode=0o644 data="hello\n""\0"*8186
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.realsize'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=s size=8192 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=S path=s size=8192 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n""\0"*8186
+ok
+
+[go 1.27.0]
+member type=S path=s size=8192 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n""\0"*8186
+ok

@@ -606,6 +606,7 @@ fn a_record_the_header_derives_or_readers_part_over_is_refused() {
         b"hdrcharset",
         b"SCHILY.devmajor",
         b"SCHILY.devminor",
+        b"SCHILY.realsize",
         b"SCHILY.xattr.user.k",
         b"LIBARCHIVE.xattr.user.k",
         b"RHT.security.selinux",
@@ -623,7 +624,9 @@ fn a_record_the_header_derives_or_readers_part_over_is_refused() {
             keyword.escape_ascii(),
         );
     }
-    for keyword in [&b""[..], b"a=b", b"a\0b"] {
+    // A keyword beginning with a space or a tab is one GNU tar reads without
+    // them, and the others with them.
+    for keyword in [&b""[..], b"a=b", b"a\0b", b" comment", b"\tcomment"] {
         let mut header = Header::file("f", 0);
         header.add_record(keyword, "v");
         assert_eq!(

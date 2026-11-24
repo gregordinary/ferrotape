@@ -1,0 +1,39 @@
+[statement]
+A member after a first, whose checksum is its right sum written in GNU's
+base-256 form, declaring 512 bytes of data that hold a setuid member's
+header. GNU tar and bsdtar pass over the header as damaged, and list the
+setuid member. Python reads the member and its data, and Go fails at the
+header. ferrotape refuses the archive at the header.
+
+[archive]
+header name=first
+data "1\n"
+header name=cover size=512 checksum=base256
+header name=hidden-setuid mode=0o4755
+end
+
+[verdict]
+all: refused Checksum at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=hidden-setuid size=0 mode=0o4755 data=""
+warning "tar: Skipping to next header"
+warning "tar: Exiting with failure status due to previous errors"
+exit 2
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=hidden-setuid size=0 mode=0o4755
+warning "bsdtar: Damaged tar archive (bad header checksum)"
+warning "bsdtar: Retrying..."
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:04e1f85925412be7
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+error "archive/tar: invalid tar header"

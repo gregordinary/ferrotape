@@ -1,0 +1,31 @@
+[statement]
+A mode field of seven spaces and a NUL, with no digit. Every reader reads
+mode 0, and so does ferrotape.
+
+[archive]
+header name=f mode="       \x00"
+header name=tail
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=f size=0 mode=0o0 data=""
+member listed=- path=tail size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=0 mode=0o0
+member listed=- path=tail size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=0 mode=0o0 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=f size=0 mode=0o0 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

@@ -41,6 +41,11 @@ const GNAME: Range<usize> = 297..329;
 const DEVMAJOR: Range<usize> = 329..337;
 const DEVMINOR: Range<usize> = 337..345;
 const PREFIX: Range<usize> = 345..500;
+/// The last four bytes of a block, where star writes its trailer.
+const STAR_TRAILER: Range<usize> = 508..512;
+/// The length of star's prefix field. star keeps its access and change times
+/// in the rest of the bytes POSIX gives the prefix.
+const STAR_PREFIX: usize = 131;
 
 /// The header layout a block holds, by its six bytes of magic alone. The
 /// version is weighed where it matters (`Fields::exact_magic`).
@@ -83,6 +88,11 @@ pub(crate) struct Fields {
     /// Whether a POSIX header's prefix ends in `/`, which bsdtar joins to the
     /// name without adding one.
     pub(crate) prefix_slash: bool,
+    /// Whether a POSIX header ending in star's trailer, `tar` and a NUL, has a
+    /// prefix longer than star's. Go reads such a header as star's, its
+    /// prefix cut at 131 bytes, where the other readers join the whole
+    /// prefix to the name.
+    pub(crate) star_prefix: bool,
     /// Whether a header holds an owner name, or a device's number other than
     /// 0, where its magic and version are neither POSIX's nor GNU's exactly.
     /// The readers read those fields from some such headers and not from
@@ -135,6 +145,8 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     let prefix = text(&block[PREFIX]);
     let stray_prefix = magic != Magic::Posix && !prefix.is_empty();
     let prefix_slash = magic == Magic::Posix && prefix.ends_with(b"/");
+    let star_prefix =
+        magic == Magic::Posix && &block[STAR_TRAILER] == b"tar\0" && prefix.len() > STAR_PREFIX;
     if magic == Magic::Posix && !prefix.is_empty() {
         path = [prefix, b"/", &path].concat();
     }
@@ -163,9 +175,18 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     // The device fields are read in every header, whatever its type and its
     // magic: bsdtar, Go and Python refuse a header with magic whose device
     // field does not read, a regular file's included, and Python reads them
-    // under any magic, ending the archive at one it cannot read.
-    let major = unsigned(&block[DEVMAJOR]).map_err(field(HeaderField::DevMajor))?;
-    let minor = unsigned(&block[DEVMINOR]).map_err(field(HeaderField::DevMinor))?;
+    // under any magic, ending the archive at one it cannot read. GNU tar reads
+    // a device's alone, so a blank one is read alike, as zero, on any other
+    // member.
+    let device_field = |bytes: &[u8]| {
+        if !matches!(block[TYPEFLAG], b'3' | b'4') && blank(bytes) {
+            Ok(0)
+        } else {
+            unsigned(bytes)
+        }
+    };
+    let major = device_field(&block[DEVMAJOR]).map_err(field(HeaderField::DevMajor))?;
+    let minor = device_field(&block[DEVMINOR]).map_err(field(HeaderField::DevMinor))?;
     // Past byte 257, so a v7 header names its owner by id alone and has no
     // device numbers to report. A header with magic has both.
     let (uname, gname, device) = match magic {
@@ -209,6 +230,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
         device,
         stray_prefix,
         prefix_slash,
+        star_prefix,
         unknown_magic,
         exact_magic,
     })
@@ -220,8 +242,16 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
 /// The unsigned sum is the format's. The signed sum is accepted as well, as
 /// GNU tar documents for archives from historical writers. Every reader
 /// ferrotape is measured against accepts it.
+///
+/// The stored sum is octal. Python reads a header whose sum is in GNU's
+/// base-256 form. GNU tar and bsdtar pass over it, as a header whose checksum
+/// does not match.
 fn checksum_matches(block: &[u8; BLOCK]) -> bool {
-    let Ok(stored) = number(&block[CHECKSUM]) else {
+    let field = &block[CHECKSUM];
+    if blank(field) {
+        return false;
+    }
+    let Ok(stored) = octal(field) else {
         return false;
     };
     let bytes = || {
@@ -246,11 +276,30 @@ pub(crate) fn text(field: &[u8]) -> &[u8] {
 }
 
 /// A numeric field: octal digits, or GNU's base-256 form where the first
-/// byte has its high bit set.
+/// byte has its high bit set. A [`blank`] field does not read.
 pub(crate) fn number(field: &[u8]) -> Result<i64, Numeric> {
+    if blank(field) {
+        return Err(Numeric::Unreadable);
+    }
     match field.split_first() {
         Some((first, rest)) if first & 0x80 != 0 => base256(*first, rest),
         _ => octal(field),
+    }
+}
+
+/// Whether a numeric field holds no value the readers read alike: spaces
+/// alone, or a NUL followed by anything but NULs.
+///
+/// GNU tar reports a field of spaces as malformed, and reads it as all bits
+/// set: a mode of `0o7777`, a device number of 4294967295. bsdtar, Go and
+/// Python read zero. Where a NUL comes first, bsdtar and Python read zero,
+/// and GNU tar and Go read the digits after it. A field of NULs alone, and
+/// one of spaces ending in a NUL, are zero to every reader.
+fn blank(field: &[u8]) -> bool {
+    match field.split_first() {
+        Some((0, rest)) => rest.iter().any(|byte| *byte != 0),
+        Some(_) => field.iter().all(|byte| *byte == b' '),
+        None => false,
     }
 }
 
@@ -260,7 +309,8 @@ fn unsigned(field: &[u8]) -> Result<u32, Numeric> {
 }
 
 /// An octal field: leading spaces, digits, then a space or a NUL ending
-/// them. A field of blanks or NULs alone is zero, as GNU tar reads one.
+/// them. A field of spaces ending in a NUL, with no digit, is zero, as every
+/// reader reads one. A [`blank`] field is refused before this.
 ///
 /// After a space that ends the digits, the field holds spaces alone up to its
 /// first NUL. GNU tar and bsdtar read digits followed by a space and more as

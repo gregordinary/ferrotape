@@ -1,0 +1,34 @@
+[statement]
+A mode field holding a NUL and then the octal digits of 4755, after a first
+member. GNU tar and Go read mode 4755, setuid included. bsdtar and Python
+read mode 0. ferrotape refuses the archive at the header.
+
+[archive]
+header name=first
+data "1\n"
+header name=cover mode="\x000004755"
+data "x"
+end
+
+[verdict]
+all: refused HeaderField at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=cover size=1 mode=0o4755 data="x"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=cover size=1 mode=0o0
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=1 mode=0o0 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=1 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data="x"
+ok

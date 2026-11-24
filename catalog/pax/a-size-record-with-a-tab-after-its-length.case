@@ -1,0 +1,34 @@
+[statement]
+A pax `size` record of 512 with a tab after the space that follows its
+length, on a member whose header declares no data, before a setuid member.
+GNU tar passes over the tab, and reads the setuid member's header as the
+first member's data. bsdtar, Python and Go read a keyword none applies, and
+list the setuid member. ferrotape refuses the archive.
+
+[archive]
+pax "\tsize"=512
+header name=cover size=0
+header name=hidden-setuid mode=0o4755
+end
+
+[verdict]
+all: refused PaxFraming at 0
+
+[gnu-tar 1.35]
+member listed=- path=cover size=512 mode=0o644 data=512:04e1f85925412be7
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=cover size=0 mode=0o644
+member listed=- path=hidden-setuid size=0 mode=0o4755
+exit 0
+
+[python 3.12.3]
+member type=0 path=cover size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=hidden-setuid size=0 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=cover size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=hidden-setuid size=0 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

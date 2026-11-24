@@ -1,0 +1,32 @@
+[statement]
+A regular file whose major number field holds a NUL and then the digits of
+5. GNU tar reads a device's numbers alone, and every reader reads the file
+alike, as does ferrotape.
+
+[archive]
+header name=f devmajor="\x000000005"
+header name=tail
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=f size=0 mode=0o644 data=""
+member listed=- path=tail size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=f size=0 mode=0o644
+member listed=- path=tail size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=tail size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

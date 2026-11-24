@@ -144,6 +144,10 @@ pub enum ErrorKind {
     /// A header holding the ustar or GNU magic fails its checksum. The stored
     /// value matches neither the unsigned sum of the block's bytes nor the
     /// signed sum some historical writers stored.
+    ///
+    /// The sum is octal. Python reads a header whose sum is written in GNU's
+    /// base-256 form. GNU tar and bsdtar pass over it, and read the next block
+    /// as a header.
     Checksum,
     /// A block where a header belongs, after the first, holds neither magic
     /// nor a checksum that matches.
@@ -185,11 +189,11 @@ pub enum ErrorKind {
         /// The record's keyword.
         keyword: Keyword,
     },
-    /// A pax `path` or `linkpath` record holds a NUL byte.
+    /// A pax `path`, `linkpath`, `uname` or `gname` record holds a NUL byte.
     ///
     /// A record's length, not a NUL, ends its value, so the byte is part of a
-    /// name no file can have. GNU tar and bsdtar cut the name there, Python
-    /// keeps the byte, and Go refuses the archive.
+    /// name no file or owner can have. GNU tar and bsdtar cut the name there,
+    /// Python keeps the byte, and Go refuses the archive.
     PaxNul {
         /// The record's keyword.
         keyword: Keyword,
@@ -437,6 +441,15 @@ pub enum ErrorKind {
     /// reads `a/b` and `/x`. A leading `//` is a name POSIX leaves to the
     /// system, and on Windows a network share.
     PrefixSlash,
+    /// A POSIX header ends in star's trailer, `tar` and a NUL in its last four
+    /// bytes. Its prefix, longer than star's 131 bytes, names its member, no
+    /// pax record or long name replacing it.
+    ///
+    /// Go reads such a header in star's format: its prefix is the first 131
+    /// bytes, and the bytes after them are star's access and change times.
+    /// GNU tar, bsdtar and Python join the whole prefix to the name, and so
+    /// name the member differently.
+    StarPrefix,
     /// A member's name, after any long name and pax record, is empty. GNU tar
     /// substitutes `.`, bsdtar skips the member, and Python and Go report the
     /// empty name. For an empty GNU long name, bsdtar and Go take the
@@ -526,6 +539,17 @@ pub enum ErrorKind {
     /// says 512. It reads any slot as a map it fails on. GNU tar, Go and Python read the
     /// header's own fields.
     SparseFields,
+    /// A file or a hard link that is not sparse has a `SCHILY.realsize` record
+    /// that is not its size in decimal digits.
+    ///
+    /// bsdtar takes the record as the size of a file, a hard link, or a member
+    /// of a typeflag it does not know. It
+    /// extracts a file of that length: the data, then zeros to the size, or
+    /// the data cut short. A record that is not a number reads to it as zero.
+    /// GNU tar, Go and Python ignore the record. Every reader takes a sparse
+    /// member's real size from its map. On a directory, a link, a device or a
+    /// FIFO, every reader ignores the record, and it is read.
+    RealSizeRecord,
     /// A sparse member whose map the reference readers would extract
     /// otherwise than one another, or which the reader would hold beyond its
     /// limits. [`SparseFlaw`] names the rule it breaks.
@@ -704,6 +728,10 @@ impl fmt::Display for ErrorKind {
             ErrorKind::PrefixSlash => {
                 f.write_str("a member's name prefix ends in `/`, which readers join differently")
             }
+            ErrorKind::StarPrefix => f.write_str(
+                "a header ending in star's trailer has a name prefix longer than star's, \
+                 which readers cut differently",
+            ),
             ErrorKind::EmptyName => f.write_str("a member has an empty name"),
             ErrorKind::HardLinkWithoutTarget => f.write_str("a hard link names no target"),
             ErrorKind::DirectoryWithData => {
@@ -733,6 +761,9 @@ impl fmt::Display for ErrorKind {
             ),
             ErrorKind::SparseFields => f.write_str(
                 "a GNU header that is not a sparse member holds an old sparse header's fields",
+            ),
+            ErrorKind::RealSizeRecord => f.write_str(
+                "a file that is not sparse has a `SCHILY.realsize` record other than its size",
             ),
             ErrorKind::Sparse(flaw) => write!(f, "a sparse member's map {flaw}"),
             ErrorKind::MetadataLimit { size, limit } => write!(
@@ -928,6 +959,16 @@ pub enum Numeric {
     /// the first digits. bsdtar does too, where the header is not the
     /// archive's first. Go and Python cannot read them, and Python ends the
     /// archive at that header.
+    ///
+    /// A header field of spaces alone does not read either, nor does one
+    /// that begins with a NUL and holds anything but NULs after it. GNU tar
+    /// reports a field of spaces as malformed and reads it as all bits set,
+    /// a mode of `0o7777`, where the others read zero. After a leading NUL,
+    /// GNU tar and Go read the digits that follow, and bsdtar and Python
+    /// read zero. A field of NULs alone, or of spaces ending in a NUL, is
+    /// zero to every reader. A device's numbers are held to this, and
+    /// another member's are read as zero, since GNU tar reads them only for
+    /// a device.
     Unreadable,
     /// It reads as a value the field cannot hold: a negative mode, id or size,
     /// or one too large for the field's type. A size of 2^60 or more is out
@@ -957,6 +998,15 @@ pub enum PaxFraming {
     /// The record's keyword holds a NUL. GNU tar and bsdtar end a keyword
     /// there, and Go refuses the archive.
     KeywordNul,
+    /// The record's keyword is empty. GNU tar and bsdtar read on past the
+    /// record. Python ends the archive at its member, having listed the
+    /// members before it, and Go fails there.
+    EmptyKeyword,
+    /// A space or a tab follows the space after the record's length. GNU tar
+    /// passes over them and applies the record by the keyword after them.
+    /// bsdtar, Go and Python read the keyword as spelled, one no reader
+    /// applies.
+    BlankBeforeKeyword,
 }
 
 impl fmt::Display for PaxFraming {
@@ -968,6 +1018,8 @@ impl fmt::Display for PaxFraming {
             PaxFraming::NoNewline => "a pax record does not end in a newline",
             PaxFraming::NoEquals => "a pax record has no `=`",
             PaxFraming::KeywordNul => "a pax record's keyword holds a NUL",
+            PaxFraming::EmptyKeyword => "a pax record's keyword is empty",
+            PaxFraming::BlankBeforeKeyword => "a pax record's keyword begins with a space or a tab",
         })
     }
 }

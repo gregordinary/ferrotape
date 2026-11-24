@@ -1,0 +1,41 @@
+[statement]
+A pax record with an empty keyword, `=x`, after a first member and before
+two more. GNU tar and bsdtar report it and list all three members. Python
+ends the archive at it, having listed the first member, and Go fails there.
+ferrotape refuses the archive at the pax header.
+
+[archive]
+header name=one
+data "1\n"
+pax ""=x
+header name=two
+data "2\n"
+header name=three
+data "3\n"
+end
+
+[verdict]
+all: refused PaxFraming at 1024
+
+[gnu-tar 1.35]
+member listed=- path=one size=2 mode=0o644 data="1\n"
+member listed=- path=two size=2 mode=0o644 data="2\n"
+member listed=- path=three size=2 mode=0o644 data="3\n"
+warning "tar: Ignoring unknown extended header keyword ''"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=one size=2 mode=0o644
+member listed=- path=two size=2 mode=0o644
+member listed=- path=three size=2 mode=0o644
+warning "bsdtar: Ignoring malformed pax attributes: empty name found"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=one size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+ok
+
+[go 1.27.0]
+member type=0 path=one size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+error "archive/tar: invalid tar header"
