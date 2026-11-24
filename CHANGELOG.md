@@ -185,8 +185,8 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 - The case catalog's 264 archives. In each of the six settings, ferrotape
   gives every case its stated verdict. Wherever it reads one, it reads the
   members the readers that setting stands in for read.
-- 10,000 archives made by changing the catalog's one to three ways (9,039
-  distinct, 2,351 of them read by ferrotape in some setting). None is read
+- 10,000 archives made by changing the catalog's one to three ways (9,128
+  distinct, 2,308 of them read by ferrotape in some setting). None is read
   otherwise than by the readers its setting stands in for.
 - 4,360 tar streams in 3,994 published archives (Alpine, Debian and Gentoo
   packages and root filesystems, crates, npm packages, Python sdists,

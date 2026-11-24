@@ -236,8 +236,11 @@ setting is compared with.
 change is one of these:
 
 - A header's size, other numeric fields, checksum, magic, typeflag, names or
-  raw bytes
-- A pax record's key, value or framing
+  raw bytes. A numeric field or the checksum can take a blank or a NUL in
+  its digits, around them, or in their place.
+- A pax record's key, value or framing. A blank or a NUL can come before the
+  record's length, or before, inside or after its keyword. The keyword can
+  be empty, or a zero can lead the length.
 - The items themselves: removed, repeated, swapped, cut short, or joined by
   another case's member
 

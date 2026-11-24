@@ -5,10 +5,11 @@
 //! a header's numeric fields (its size above all), checksum, magic,
 //! typeflag, names or raw bytes; a pax record's key, value or framing; or
 //! the items themselves, deleted, repeated, swapped, cut short, or joined by
-//! another case's member. Each mutant is derived from a seed and its index
+//! another case's member. A numeric field, the checksum and a record's
+//! framing take blanks and NULs where a lenient reader passes over them. Each mutant is derived from a seed and its index
 //! alone, so a run's mutants are the same however many threads read them.
 
-use crate::archive::{Archive, BLOCK, Checksum, Header, Item, Magic, Number, frame};
+use crate::archive::{Archive, BLOCK, Checksum, Header, Item, Magic, Number, Record, frame};
 
 /// A small deterministic generator (SplitMix64), so a mutant reproduces from
 /// its seed and index with no dependency.
@@ -82,12 +83,16 @@ const KEYS: &[&str] = &[
     "SCHILY.dev",
     "SCHILY.ino",
     "SCHILY.nlink",
+    "SCHILY.nlinks",
     "SCHILY.filetype",
     "SCHILY.fflags",
     "SCHILY.devmajor",
     "SCHILY.devminor",
+    "SCHILY.realsize",
     "RHT.security.selinux",
     "LIBARCHIVE.creationtime",
+    "LIBARCHIVE.symlinktype",
+    "SUN.holesdata",
 ];
 
 /// Values a mutation gives a pax record.
@@ -148,6 +153,69 @@ const RAW_NUMBERS: &[&[u8]] = &[
     b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
 ];
 
+/// The blanks a lenient reader may pass over: a space, a tab, a NUL.
+const BLANKS: &[u8] = b" \t\0";
+
+/// `value`'s octal digits, `width` bytes with the NUL that ends them, with
+/// a blank put where a lenient reader might pass over it: before the
+/// digits, between them, after them, or in place of them all.
+fn lenient(rng: &mut Rng, value: u64, width: usize) -> Vec<u8> {
+    let mut digits = format!("{value:0w$o}", w = width - 1).into_bytes();
+    let blank = *rng.pick(BLANKS);
+    match rng.below(6) {
+        // In place of a leading zero, or before the digits.
+        0 => digits[0] = blank,
+        1 => {
+            digits.insert(0, blank);
+            digits.truncate(width - 1);
+        }
+        // Between two digits, the field keeping its width.
+        2 => {
+            let at = 1 + rng.below(width - 2);
+            digits.insert(at, blank);
+            digits.remove(0);
+        }
+        // Ending the digits.
+        3 => {
+            digits.push(blank);
+            return digits;
+        }
+        // The field of blanks alone, or blanks then a NUL.
+        4 => digits = vec![blank; width - 1],
+        _ => {
+            digits = vec![blank; width];
+            return digits;
+        }
+    }
+    digits.push(0);
+    digits
+}
+
+/// The value a numeric field holds, where it is octal.
+fn value_of(number: &Number) -> u64 {
+    match number {
+        Number::Octal(v) => *v,
+        _ => 0,
+    }
+}
+
+/// Checksum spellings a lenient reader might read: the right sum with blanks
+/// before, between or after its digits, eight digits, or base-256.
+const CHECKSUMS: &[&[u8]] = &[
+    b"\0###### ",
+    b" ######\0",
+    b"\t######\0",
+    b"######\t\0",
+    b"######\t ",
+    b"### ###\0",
+    b"###\0###\0",
+    b"###\t###\0",
+    b"########",
+    b"####### ",
+    b"#######\0",
+    b"  ######",
+];
+
 /// What a mutation did, for a mutant's statement.
 pub type Steps = Vec<String>;
 
@@ -182,9 +250,17 @@ fn size(rng: &mut Rng, body: u64) -> Number {
         0o77_777_777_777,
         1 << 33,
     ];
-    match rng.below(10) {
+    match rng.below(12) {
         0 => Number::Base256(*rng.pick(&[0, 6, 1024, -1, i64::MAX])),
         1 => Number::Raw(rng.pick(RAW_NUMBERS).to_vec()),
+        2 | 3 => {
+            let value = if rng.one_in(2) {
+                body
+            } else {
+                *rng.pick(&near)
+            };
+            Number::Raw(lenient(rng, value, 12))
+        }
         _ => Number::Octal(*rng.pick(&near)),
     }
 }
@@ -217,7 +293,11 @@ fn mutate_header(rng: &mut Rng, header: &mut Header, body: u64, steps: &mut Step
             header.size = Some(value);
         }
         3 => {
-            header.checksum = rng.pick(&[Checksum::Signed, Checksum::Bad]).clone();
+            header.checksum = match rng.below(4) {
+                0 => rng.pick(&[Checksum::Signed, Checksum::Bad]).clone(),
+                1 => Checksum::Base256,
+                _ => Checksum::Spelled(rng.pick(CHECKSUMS).to_vec()),
+            };
             steps.push(format!("checksum {:?}", header.checksum));
         }
         4 => {
@@ -248,7 +328,6 @@ fn mutate_header(rng: &mut Rng, header: &mut Header, body: u64, steps: &mut Step
             header.prefix = prefix;
         }
         10 => {
-            let value = number(rng);
             let field = rng.below(6);
             let (name, slot) = match field {
                 0 => ("mode", &mut header.mode),
@@ -257,6 +336,15 @@ fn mutate_header(rng: &mut Rng, header: &mut Header, body: u64, steps: &mut Step
                 3 => ("mtime", &mut header.mtime),
                 4 => ("devmajor", &mut header.devmajor),
                 _ => ("devminor", &mut header.devminor),
+            };
+            let value = if rng.one_in(3) {
+                Number::Raw(lenient(
+                    rng,
+                    value_of(slot),
+                    8 + 4 * usize::from(field == 3),
+                ))
+            } else {
+                number(rng)
             };
             steps.push(format!("{name} {value:?}"));
             *slot = value;
@@ -283,7 +371,7 @@ fn mutate_records(rng: &mut Rng, archive: &mut Archive, i: usize, steps: &mut St
     } else {
         rng.below(records.len())
     };
-    match rng.below(6) {
+    match rng.below(7) {
         0 if !records.is_empty() => {
             let (key, _) = records.remove(at);
             steps.push(format!("record {} removed", crate::value::render(&key)));
@@ -318,26 +406,18 @@ fn mutate_records(rng: &mut Rng, archive: &mut Archive, i: usize, steps: &mut St
             ));
             records[at].1 = text;
         }
-        4 if !records.is_empty() => {
-            // Each record framed alone, one length changed.
+        arm @ (4 | 5) if !records.is_empty() => {
+            // Each record framed alone, one framed otherwise: its length
+            // misstated, or a blank put in its framing.
             let mut out = Vec::new();
             for (n, record) in records.iter().enumerate() {
-                let mut framed = frame(std::slice::from_ref(record));
-                if n == at {
-                    let space = framed.iter().position(|&b| b == b' ').unwrap_or(0);
-                    let length: i64 = std::str::from_utf8(&framed[..space])
-                        .ok()
-                        .and_then(|t| t.parse().ok())
-                        .unwrap_or(0);
-                    let wrong = (length + rng.pick(&[-1, 1, -3, 10, 1000])).max(0);
-                    steps.push(format!(
-                        "record {} framed with length {wrong}",
-                        crate::value::render(&record.0)
-                    ));
-                    let mut again = wrong.to_string().into_bytes();
-                    again.extend_from_slice(&framed[space..]);
-                    framed = again;
-                }
+                let framed = if n != at {
+                    frame(std::slice::from_ref(record))
+                } else if arm == 4 {
+                    misframed(rng, record, steps)
+                } else {
+                    blank_framed(rng, record, steps)
+                };
                 out.extend_from_slice(&framed);
             }
             let length = out.len() as u64;
@@ -363,6 +443,84 @@ fn mutate_records(rng: &mut Rng, archive: &mut Archive, i: usize, steps: &mut St
             records.insert(at, record);
         }
     }
+}
+
+/// `record` framed with a length other than its own.
+fn misframed(rng: &mut Rng, record: &Record, steps: &mut Steps) -> Vec<u8> {
+    let framed = frame(std::slice::from_ref(record));
+    let space = framed.iter().position(|&b| b == b' ').unwrap_or(0);
+    let length: i64 = std::str::from_utf8(&framed[..space])
+        .ok()
+        .and_then(|t| t.parse().ok())
+        .unwrap_or(0);
+    let wrong = (length + rng.pick(&[-1, 1, -3, 10, 1000])).max(0);
+    steps.push(format!(
+        "record {} framed with length {wrong}",
+        crate::value::render(&record.0)
+    ));
+    let mut again = wrong.to_string().into_bytes();
+    again.extend_from_slice(&framed[space..]);
+    again
+}
+
+/// `record` framed by its length, with a blank where a lenient reader might
+/// pass over it: before the length, before, inside or after the keyword; or
+/// with its keyword empty, or its length led by a zero. The length counts
+/// what is written, so the record frames.
+fn blank_framed(rng: &mut Rng, record: &Record, steps: &mut Steps) -> Vec<u8> {
+    let (key, value) = record;
+    let blank = *rng.pick(BLANKS);
+    let shown = crate::value::render(&[blank]);
+    let mut keyword = key.clone();
+    let (mut before, mut zero) = (Vec::new(), false);
+    let what = match rng.below(6) {
+        0 => {
+            before.push(blank);
+            format!("{shown} before its length")
+        }
+        1 => {
+            keyword.insert(0, blank);
+            format!("{shown} before its keyword")
+        }
+        2 => {
+            keyword.insert(rng.below(keyword.len() + 1), blank);
+            format!("{shown} inside its keyword")
+        }
+        3 => {
+            keyword.push(blank);
+            format!("{shown} after its keyword")
+        }
+        4 => {
+            keyword.clear();
+            "an empty keyword".to_owned()
+        }
+        _ => {
+            zero = true;
+            "a zero leading its length".to_owned()
+        }
+    };
+    let mut line = vec![b' '];
+    line.extend_from_slice(&keyword);
+    line.push(b'=');
+    line.extend_from_slice(value);
+    line.push(b'\n');
+    let digits = |length: usize| length.to_string().len() + usize::from(zero);
+    let fixed = before.len() + line.len();
+    let mut length = fixed + 1;
+    while fixed + digits(length) != length {
+        length = fixed + digits(length);
+    }
+    let mut out = before;
+    if zero {
+        out.push(b'0');
+    }
+    out.extend_from_slice(length.to_string().as_bytes());
+    out.extend_from_slice(&line);
+    steps.push(format!(
+        "record {} framed with {what}",
+        crate::value::render(key)
+    ));
+    out
 }
 
 /// A member of another archive: a header and the body after it, if any.
