@@ -1,6 +1,8 @@
 //! The error a read fails with: where in the stream, and which rule the
 //! archive breaks.
 
+#[cfg(feature = "std")]
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 #[cfg(feature = "std")]
@@ -13,7 +15,9 @@ use crate::entry::EntryKind;
 /// [`kind`](Self::kind) names the rule the archive breaks, or says that the
 /// source beneath it failed. [`offset`](Self::offset) says where in the
 /// stream. For [`ErrorKind::Io`], [`source`](core::error::Error::source) is
-/// the source's own failure.
+/// the source's own failure. A [`Reader`](crate::Reader) that has failed
+/// repeats the failure on every later call, the source's failure as an
+/// [`io::Error`] of the same kind and message.
 ///
 /// An `Error` converts into an [`io::Error`] that carries it, which is what
 /// [`Data`](crate::Data) returns. A [`Reader`](crate::Reader) whose source
@@ -74,6 +78,44 @@ impl Error {
     #[must_use]
     pub fn offset(&self) -> u64 {
         self.offset
+    }
+}
+
+/// A failure kept to be returned again. An [`io::Error`] cannot be copied,
+/// so a source's failure is kept as its [`io::ErrorKind`] and its message.
+#[cfg(feature = "std")]
+#[derive(Debug)]
+pub(crate) struct Failure {
+    offset: u64,
+    kind: ErrorKind,
+    source: Option<(io::ErrorKind, String)>,
+}
+
+#[cfg(feature = "std")]
+impl Failure {
+    /// `err`, kept.
+    pub(crate) fn of(err: &Error) -> Failure {
+        Failure {
+            offset: err.offset,
+            kind: err.kind.clone(),
+            source: err
+                .source
+                .as_ref()
+                .map(|source| (source.kind(), source.to_string())),
+        }
+    }
+
+    /// The failure as an [`Error`], its source's failure an [`io::Error`] of
+    /// the kind and message kept.
+    pub(crate) fn error(&self) -> Error {
+        Error {
+            offset: self.offset,
+            kind: self.kind.clone(),
+            source: self
+                .source
+                .as_ref()
+                .map(|(kind, message)| io::Error::new(*kind, message.clone())),
+        }
     }
 }
 

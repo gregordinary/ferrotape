@@ -496,6 +496,38 @@ fn a_source_that_fails_is_reported_as_the_sources_failure() {
 }
 
 #[test]
+fn a_source_s_failure_is_repeated_with_its_kind_and_message() {
+    // Every later call repeats the first failure. An `io::Error` cannot be
+    // copied, so the source's failure comes back as one of the same kind and
+    // message, and through `io::Error` as that kind, not as invalid data.
+    let timed_out = || io::Error::new(io::ErrorKind::TimedOut, "the peer stopped sending");
+    let mut reader = Reader::new(Failing(timed_out));
+    let first_err = reader.next_entry().unwrap_err();
+    for later in [
+        reader.next_entry().map(|_| ()).unwrap_err(),
+        reader.read_entry(1 << 20).map(|_| ()).unwrap_err(),
+        reader.finish(1 << 20).unwrap_err(),
+    ] {
+        assert_eq!(
+            (later.kind(), later.offset()),
+            (first_err.kind(), first_err.offset())
+        );
+        let source = std::error::Error::source(&later).expect("the source's failure");
+        assert_eq!(source.to_string(), "the peer stopped sending");
+        let err = io::Error::from(later);
+        assert_eq!(
+            (err.kind(), err.to_string()),
+            (
+                io::ErrorKind::TimedOut,
+                "the peer stopped sending".to_owned()
+            )
+        );
+    }
+    let through_data = reader.data().read(&mut [0; 16]).unwrap_err();
+    assert_eq!(through_data.kind(), io::ErrorKind::TimedOut);
+}
+
+#[test]
 fn an_archive_read_from_another_archives_member_reports_where_the_outer_one_fails() {
     // The inner archive's source is the outer archive's member, and the
     // outer archive ends inside it. The inner reader returns the outer

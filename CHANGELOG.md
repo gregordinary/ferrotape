@@ -100,7 +100,8 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   error is kept as the source. A reader's `Error` converts into an
   `io::Error` that carries it, and a reader whose source fails with one
   returns it as it was. Once a call fails, every later call fails the same
-  way, except a refusal of `read_entry`'s limit.
+  way, except a refusal of `read_entry`'s limit. A source's failure is
+  repeated with its `io::ErrorKind` and message.
 - The `differences` page of the documentation. It lists every kind of archive
   on which ferrotape reads otherwise than GNU tar, bsdtar, Go or Python. Each
   row gives what each reader does, what ferrotape does at each level, and the

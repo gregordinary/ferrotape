@@ -6,7 +6,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 
 use crate::decoder::{Chunk, Decoder, Step};
 use crate::entry::Entry;
-use crate::error::{Error, ErrorKind};
+use crate::error::{Error, ErrorKind, Failure};
 use crate::pax::PaxRecords;
 use crate::settings::{GlobalHeaders, Level, Limits};
 
@@ -62,7 +62,7 @@ pub struct Reader<R> {
     /// Set where the source is passed over by seeking rather than read.
     seek: Option<SeekPast<R>>,
     /// The first failure, which every later call repeats.
-    failed: Option<(u64, ErrorKind)>,
+    failed: Option<Failure>,
 }
 
 impl<R: Read> Reader<R> {
@@ -262,14 +262,14 @@ impl<R: Read> Reader<R> {
         &mut self,
         op: impl FnOnce(&mut Reader<R>) -> Result<T, Error>,
     ) -> Result<T, Error> {
-        if let Some((offset, kind)) = &self.failed {
-            return Err(Error::new(*offset, kind.clone()));
+        if let Some(failed) = &self.failed {
+            return Err(failed.error());
         }
         let result = op(self);
         if let Err(err) = &result
             && !matches!(err.kind(), ErrorKind::EntryLimit { .. })
         {
-            self.failed = Some((err.offset(), err.kind().clone()));
+            self.failed = Some(Failure::of(err));
         }
         result
     }
