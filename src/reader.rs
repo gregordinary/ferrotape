@@ -171,11 +171,17 @@ impl<R: Read> Reader<R> {
     /// is the whole of it, never a part: an archive that ends inside it is
     /// refused.
     ///
+    /// A `limit` above half the largest allocation the target allows, 1 GiB
+    /// on a 32-bit target, is read as that half.
+    ///
     /// # Errors
     ///
     /// [`ErrorKind::EntryLimit`] for a member larger than `limit`. Otherwise
     /// as [`next_entry`](Self::next_entry).
     pub fn read_entry(&mut self, limit: u64) -> Result<Vec<u8>, Error> {
+        // A buffer that doubles as it grows asks for twice what it holds, so
+        // what it may hold is bounded by half the largest allocation.
+        let limit = limit.min(crate::settings::allocation_bound());
         self.guarded(|reader| {
             let size = reader.decoder.data_remaining();
             if size > limit {

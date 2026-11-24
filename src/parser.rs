@@ -354,7 +354,7 @@ impl Parser {
             return refuse(ErrorKind::SecondGlobal);
         }
         let size = header.size;
-        let limit = self.limits.metadata;
+        let limit = self.limits.metadata_bound();
         if size > limit {
             return refuse(ErrorKind::MetadataLimit { size, limit });
         }
@@ -634,7 +634,7 @@ impl Parser {
         let data_offset = entry.data_offset;
         if old_sparse {
             // The header's block is the first of the map's blocks.
-            if BLOCK_LEN > self.limits.metadata {
+            if BLOCK_LEN > self.limits.metadata_bound() {
                 return Err(flawed(SparseFlaw::MapLimit));
             }
             let (regions, real_size, more) = sparse::old_header(block).map_err(flawed)?;
@@ -692,7 +692,7 @@ impl Parser {
         };
         let declared = entry.declared_size;
         let data_offset = at.saturating_add(BLOCK_LEN);
-        let limit = self.limits.metadata;
+        let limit = self.limits.metadata_bound();
         match source {
             MapSource::Extensions {
                 mut regions,

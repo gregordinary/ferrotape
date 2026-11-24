@@ -88,7 +88,10 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
   an `io::Error`.
 - `Timestamp`: `new` and `from_secs`, and `secs` and `nanos`.
 - `Limits`, set on the reader: the most data a metadata member may declare, 1
-  MiB by default.
+  MiB by default. No buffer the reader grows asks for more than one
+  allocation can be. So a limit above a sixteenth of the largest allocation
+  the target allows is read as that sixteenth: 128 MiB on a 32-bit target.
+  `read_entry`'s limit is read likewise as at most half of it.
 - `Error`, with the `ErrorKind` and the offset in the stream. A kind's
   details are `HeaderField`, `Keyword`, `Metadata`, `Numeric`, `PaxFraming`
   and `Truncation`, and a `HeaderError`'s `TextField`. A failing source's own

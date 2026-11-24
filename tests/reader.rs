@@ -419,6 +419,31 @@ fn a_metadata_member_is_held_to_the_metadata_limit() {
     let mut reader = Reader::new(&archive[..]).with_limits(limits);
     assert_eq!(reader.next_entry().unwrap().unwrap().path(), &name[..]);
 
+    // A limit no allocation could follow is read as a sixteenth of the
+    // largest allocation the target allows: 2^59 - 1 bytes on a 64-bit
+    // target, 128 MiB on a 32-bit one.
+    limits.metadata = u64::MAX;
+    let mut huge = Header::new("PaxHeader", b'x', 0).block();
+    huge[124..136].copy_from_slice(&{
+        let mut field = [0u8; 12];
+        field[0] = 0x80;
+        field[4..].copy_from_slice(&(1u64 << 59).to_be_bytes());
+        field
+    });
+    support::seal(&mut huge);
+    let err = Reader::new(&huge[..])
+        .with_limits(limits)
+        .next_entry()
+        .unwrap_err();
+    let bound = u64::try_from(isize::MAX.unsigned_abs() / 16).unwrap();
+    assert_eq!(
+        err.kind(),
+        &ErrorKind::MetadataLimit {
+            size: 1 << 59,
+            limit: bound,
+        },
+    );
+
     limits.metadata = 10;
     for (records, refused) in [
         (pax_record(b"comment", b"x"), true),

@@ -28,6 +28,10 @@ pub struct Limits {
     /// 1.0 map's blocks. A map in pax records is within its extended header.
     ///
     /// 1 MiB by default. Real metadata members are at most a few kilobytes.
+    /// What the reader holds for a member's metadata, its indexes included,
+    /// stays within what one allocation can be. So a limit above a sixteenth
+    /// of the largest allocation the target allows is read as that sixteenth:
+    /// 128 MiB on a 32-bit target.
     pub metadata: u64,
 }
 
@@ -35,6 +39,24 @@ impl Default for Limits {
     fn default() -> Limits {
         Limits { metadata: 1 << 20 }
     }
+}
+
+impl Limits {
+    /// [`metadata`](Self::metadata), at most a sixteenth of the largest
+    /// allocation the target allows. What the reader builds from a metadata
+    /// member is at most about six times its size. A buffer that doubles as
+    /// it grows asks for twice what it holds. So no allocation it asks for is
+    /// larger than one can be.
+    pub(crate) fn metadata_bound(&self) -> u64 {
+        self.metadata.min(allocation_bound() / 8)
+    }
+}
+
+/// Half the largest allocation the target allows, `isize::MAX` bytes: 1 GiB
+/// on a 32-bit target. A buffer that doubles as it grows can hold this much
+/// before it asks for more than one allocation can be.
+pub(crate) fn allocation_bound() -> u64 {
+    u64::try_from(isize::MAX.unsigned_abs() / 2).unwrap_or(u64::MAX)
 }
 
 /// Whose readings an archive must agree with to be read.
