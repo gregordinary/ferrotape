@@ -217,7 +217,7 @@ fn mutate_header(rng: &mut Rng, header: &mut Header, body: u64, steps: &mut Step
             header.size = Some(value);
         }
         3 => {
-            header.checksum = *rng.pick(&[Checksum::Signed, Checksum::Bad]);
+            header.checksum = rng.pick(&[Checksum::Signed, Checksum::Bad]).clone();
             steps.push(format!("checksum {:?}", header.checksum));
         }
         4 => {

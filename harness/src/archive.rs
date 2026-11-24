@@ -27,7 +27,7 @@ pub enum Magic {
 }
 
 /// How a header's checksum is written.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Checksum {
     /// The sum of the block's bytes as unsigned, as POSIX specifies.
     Unsigned,
@@ -36,7 +36,17 @@ pub enum Checksum {
     Signed,
     /// One more than the unsigned sum, matching neither.
     Bad,
+    /// The unsigned sum in GNU's base-256 form, which numeric fields may
+    /// take: the first byte `0x80`, then the sum big-endian.
+    Base256,
+    /// The field's eight bytes as given, the unsigned sum's octal digits
+    /// filling each `#` in turn, zero-padded: `"\0######\0"` is the sum
+    /// after a NUL.
+    Spelled(Vec<u8>),
 }
+
+/// The width of a header's checksum field.
+const CHECKSUM_WIDTH: usize = 8;
 
 /// What a numeric field holds.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -276,10 +286,14 @@ fn header_line(header: &Header) -> String {
         Magic::Gnu => fields.push("magic=gnu".to_owned()),
         Magic::V7 => fields.push("magic=v7".to_owned()),
     }
-    match header.checksum {
+    match &header.checksum {
         Checksum::Unsigned => {}
         Checksum::Signed => fields.push("checksum=signed".to_owned()),
         Checksum::Bad => fields.push("checksum=bad".to_owned()),
+        Checksum::Base256 => fields.push("checksum=base256".to_owned()),
+        Checksum::Spelled(template) => {
+            fields.push(format!("checksum={}", value::quoted(template)));
+        }
     }
     for (offset, bytes) in &header.raw {
         fields.push(format!("@{offset}={}", value::quoted(bytes)));
@@ -373,14 +387,41 @@ fn block(header: &Header, body: u64) -> [u8; BLOCK] {
         put(&mut block, *offset, BLOCK - offset, bytes);
     }
     block[148..156].fill(b' ');
-    let total: i64 = match header.checksum {
-        Checksum::Unsigned => block.iter().map(|&b| i64::from(b)).sum(),
-        Checksum::Signed => block.iter().map(|&b| i64::from(b as i8)).sum(),
-        Checksum::Bad => block.iter().map(|&b| i64::from(b)).sum::<i64>() + 1,
+    let unsigned: i64 = block.iter().map(|&b| i64::from(b)).sum();
+    let field: Vec<u8> = match &header.checksum {
+        Checksum::Unsigned => format!("{unsigned:06o}\0 ").into_bytes(),
+        Checksum::Signed => {
+            let signed: i64 = block.iter().map(|&b| i64::from(b as i8)).sum();
+            format!("{:06o}\0 ", signed & 0o777777).into_bytes()
+        }
+        Checksum::Bad => format!("{:06o}\0 ", unsigned + 1).into_bytes(),
+        Checksum::Base256 => {
+            let mut field = vec![0x80];
+            field.extend_from_slice(&unsigned.to_be_bytes()[1..]);
+            field
+        }
+        Checksum::Spelled(template) => spelled(template, unsigned),
     };
-    let text = format!("{:06o}\0 ", total & 0o777777);
-    block[148..156].copy_from_slice(text.as_bytes());
+    block[148..156].copy_from_slice(&field);
     block
+}
+
+/// A checksum `template`, eight bytes, with `sum`'s octal digits filling its
+/// `#` bytes in turn, zero-padded to their count.
+fn spelled(template: &[u8], sum: i64) -> Vec<u8> {
+    let places = template.iter().filter(|&&b| b == b'#').count();
+    let digits = format!("{sum:0places$o}").into_bytes();
+    let mut digits = digits[digits.len().saturating_sub(places)..].iter();
+    template
+        .iter()
+        .map(|&b| {
+            if b == b'#' {
+                digits.next().copied().unwrap_or(b'0')
+            } else {
+                b
+            }
+        })
+        .collect()
 }
 
 /// Reads one line into items, expanding a shorthand into the items it
@@ -494,6 +535,17 @@ fn header(words: &[&str], mut header: Header) -> Result<Header, String> {
                     "unsigned" => Checksum::Unsigned,
                     "signed" => Checksum::Signed,
                     "bad" => Checksum::Bad,
+                    "base256" => Checksum::Base256,
+                    _ if text.starts_with('"') => {
+                        let template = value::parse(text)?;
+                        if template.len() != CHECKSUM_WIDTH {
+                            return Err(format!(
+                                "a spelled checksum is {CHECKSUM_WIDTH} bytes, not {}",
+                                template.len()
+                            ));
+                        }
+                        Checksum::Spelled(template)
+                    }
                     _ => return Err(format!("no checksum is `{text}`")),
                 }
             }
@@ -578,6 +630,25 @@ mod tests {
             number(&Number::Base256(-86400), 12),
             b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xae\x80"
         );
+    }
+
+    #[test]
+    fn a_checksum_is_spelled_as_its_field_says() {
+        let plain = build(&["header name=f"]);
+        let digits = &plain[148..154];
+        let sum = u64::from_str_radix(std::str::from_utf8(digits).unwrap(), 8).unwrap();
+        let spelled = build(&["header name=f checksum=\"\\0###### \""]);
+        assert_eq!(&spelled[148..156], [&[0][..], digits, b" "].concat());
+        let split = build(&["header name=f checksum=\"### ###\\0\""]);
+        assert_eq!(
+            &split[148..156],
+            [&digits[..3], b" ", &digits[3..], b"\0"].concat()
+        );
+        let base256 = build(&["header name=f checksum=base256"]);
+        let mut value = [0u8; 8];
+        value[1..].copy_from_slice(&base256[149..156]);
+        assert_eq!((base256[148], u64::from_be_bytes(value)), (0x80, sum));
+        assert!(Archive::parse(&["header checksum=\"###\""]).is_err());
     }
 
     #[test]

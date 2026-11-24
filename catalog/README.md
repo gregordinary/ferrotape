@@ -102,7 +102,7 @@ A header's fields, and what each is unless set:
 | `typeflag` | `0` |
 | `magic` | `ustar` (POSIX, version `00`). Also `gnu` (`ustar  \0`), and `v7` (none, and nothing written past the link name) |
 | `uname`, `gname` | `root` |
-| `checksum` | `unsigned`, the sum POSIX specifies. Also `signed`, and `bad`, which matches neither |
+| `checksum` | `unsigned`, the sum POSIX specifies. Also `signed`, and `bad`, which matches neither. `base256` writes the unsigned sum in GNU's base-256 form. A quoted value of eight bytes writes them, the unsigned sum's octal digits filling its `#` bytes, as `"\0###### "` does |
 | `@`*offset* | bytes written at that offset after every other field |
 
 A numeric field is written in octal, zero-padded and ending in a NUL, from a
