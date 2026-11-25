@@ -271,9 +271,9 @@ impl fmt::Debug for Entry {
 /// group's name. Where the member's own header block holds exactly the name,
 /// it is a range of the block rather than a copy. Otherwise (a long name, a
 /// pax record, a name joined to its prefix) it is bytes of its own. Which
-/// form a name takes follows from its value and the block alone, so two
-/// members alike in every field and in their blocks hold their names alike,
-/// and compare equal.
+/// form a name takes follows from its value and the block alone. Two members
+/// alike in every field and in their blocks therefore hold their names
+/// alike, and compare equal.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) enum Name {
     /// `len` bytes of the header block from `start`.

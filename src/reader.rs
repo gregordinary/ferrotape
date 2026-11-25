@@ -403,8 +403,9 @@ fn read<R: Read>(inner: &mut R, buf: &mut [u8]) -> io::Result<usize> {
 /// where that covers them, and otherwise at most [`LARGE_SCRATCH`]. Returns
 /// how many it passed over, zero where the source has ended.
 ///
-/// The scratch space is cleared before each read, so a few bytes are passed
-/// over through a small one, and many through a larger one in fewer reads.
+/// The scratch space is cleared before each read. A few bytes are therefore
+/// passed over through a small one, and many through a larger one in fewer
+/// reads.
 fn read_past<R: Read>(inner: &mut R, count: u64) -> io::Result<u64> {
     if count <= SCRATCH as u64 {
         read_past_through::<R, SCRATCH>(inner, count)

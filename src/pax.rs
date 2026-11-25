@@ -346,9 +346,9 @@ pub(crate) struct Held {
     pub(crate) default_acl: bool,
 }
 
-/// What the checks after a member's extended header is read need of its
-/// records, gathered as each is read, so that the records are framed once
-/// for all of them.
+/// What the checks run after a member's extended header need of its records.
+/// It is gathered as each record is read, so the records are framed once for
+/// every check.
 #[derive(Default)]
 struct Seen<'a> {
     /// The index of the next record: how many have been read.
@@ -568,9 +568,8 @@ fn check_repeats(data: &[u8], count: usize) -> Result<(), ErrorKind> {
 /// GNU tar keeps the last value, and bsdtar applies every record of the name
 /// in turn, so the two readers agree whatever the order. The names of the
 /// `LIBARCHIVE.xattr.` records are sorted, and each `SCHILY.xattr.` record
-/// finds its name among them by a binary search, rather than each searching
-/// the records, so the time taken grows with the header's length and not its
-/// square.
+/// finds its name among them by a binary search. The time taken then grows
+/// with the header's length, not its square.
 fn check_xattrs(data: &[u8], seen: &Seen<'_>) -> Result<(), ErrorKind> {
     if let Some(flaw) = &seen.xattr {
         return Err(flaw.clone());

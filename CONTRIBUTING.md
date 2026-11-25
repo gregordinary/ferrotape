@@ -168,8 +168,8 @@ input that fails is saved under `fuzz/artifacts/` and replays with
   is `#[non_exhaustive]`, and a member's properties are read through methods
   rather than fields. An addition is then not a breaking change. The
   decoder's `Step` and `Chunk` are the exception. A driver cannot act on a
-  variant it does not know, so both are exhaustive, and a new variant is a
-  breaking change that every driver's `match` reports.
+  variant it does not know, so both are exhaustive. A new variant is then a
+  breaking change, which every driver's `match` reports.
 - **Errors are typed and say what.** An error names the rule an archive
   breaks and its offset in the stream, as structured fields rather than
   strings. A refusal names what the reference readers disagree about, in a
