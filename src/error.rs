@@ -940,6 +940,12 @@ pub enum SparseFlaw {
     /// `tar` reads it as a regular member of its stored data, under its
     /// header's name, and for format 0.0 under the file's own name.
     PaxForm,
+    /// A pax sparse member whose POSIX header ends in star's trailer, `tar`
+    /// and a NUL. GNU tar reads such a header in star's format where star's
+    /// times are spelled as star writes them. It then misreads the member,
+    /// and lists none of the members after it. bsdtar, Go and Python read it
+    /// as any other. star writes no GNU sparse member.
+    StarTrailer,
 }
 
 impl fmt::Display for SparseFlaw {
@@ -962,6 +968,7 @@ impl fmt::Display for SparseFlaw {
             SparseFlaw::SizeRecord => "is beside a pax size record",
             SparseFlaw::MapLimit => "is larger than the metadata limit",
             SparseFlaw::PaxForm => "is in a pax form, which Strict does not read",
+            SparseFlaw::StarTrailer => "is under a header ending in star's trailer",
         })
     }
 }

@@ -437,6 +437,12 @@ impl Parser {
             if self.level == Level::Strict && pax_sparse.is_some() {
                 return Err(flawed(SparseFlaw::PaxForm));
             }
+            // GNU tar reads a header with star's trailer, and star's times as
+            // star writes them, in star's format, and a pax sparse member
+            // under it otherwise than the others, misframing what follows.
+            if pax_sparse.is_some() && header.star_trailer {
+                return Err(flawed(SparseFlaw::StarTrailer));
+            }
             if old_sparse && (pax_sparse.is_some() || block.get(257..265) != Some(GNU_MAGIC)) {
                 return Err(flawed(if pax_sparse.is_some() {
                     SparseFlaw::Records

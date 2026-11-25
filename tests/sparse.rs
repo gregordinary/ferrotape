@@ -493,6 +493,25 @@ fn a_format_1_0_map_is_digits_and_newlines() {
 }
 
 /// The flaw an archive is refused with at Compatible.
+#[test]
+fn a_pax_form_under_stars_trailer_is_refused() {
+    // GNU tar reads a header ending in star's trailer, with star's times as
+    // star writes them, in star's format, and lists none of the members
+    // after a pax sparse member under it. bsdtar, Go and Python read it as
+    // any other. It is refused whatever its times.
+    for times in [&b"00000001750 00000003720 "[..], &[0; 24]] {
+        for mut archive in [archive00(), archive01(), archive10()] {
+            // The member's header, after the pax header and its one block.
+            let block = <&mut [u8; BLOCK]>::try_from(&mut archive[1024..1024 + BLOCK]).unwrap();
+            assert_eq!(&block[257..263], b"ustar\0");
+            block[476..500].copy_from_slice(times);
+            block[508..512].copy_from_slice(b"tar\0");
+            seal(block);
+            assert_eq!(refusal(&archive), SparseFlaw::StarTrailer);
+        }
+    }
+}
+
 fn refusal(archive: &[u8]) -> SparseFlaw {
     let err = read_first(archive, Level::Compatible).unwrap_err();
     match err.kind() {

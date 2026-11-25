@@ -97,6 +97,8 @@ pub(crate) struct Fields {
     /// prefix cut at 131 bytes, where the other readers join the whole
     /// prefix to the name.
     pub(crate) star_prefix: bool,
+    /// Whether a POSIX header ends in star's trailer, `tar` and a NUL.
+    pub(crate) star_trailer: bool,
     /// Whether a header holds an owner name, or a device's number other than
     /// 0, where its magic and version are neither POSIX's nor GNU's exactly.
     /// The readers read those fields from some such headers and not from
@@ -248,6 +250,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
         stray_prefix,
         prefix_slash,
         star_prefix,
+        star_trailer: star,
         unknown_magic,
         exact_magic,
     })

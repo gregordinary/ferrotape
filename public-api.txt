@@ -271,6 +271,7 @@ pub ferrotape::SparseFlaw::PaxForm
 pub ferrotape::SparseFlaw::RealSize
 pub ferrotape::SparseFlaw::Records
 pub ferrotape::SparseFlaw::SizeRecord
+pub ferrotape::SparseFlaw::StarTrailer
 pub ferrotape::SparseFlaw::StoredSize
 impl core::fmt::Display for ferrotape::SparseFlaw
 pub fn ferrotape::SparseFlaw::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
