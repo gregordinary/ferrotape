@@ -170,14 +170,26 @@ fn a_report_beyond_what_was_asked_counts_as_what_was_asked() {
 fn a_report_with_nothing_to_answer_does_nothing() {
     let archive = Tar::new().file("a", b"hello").finish();
     let mut decoder = Decoder::new();
-    // Before anything is asked: no member, no skip.
+    // Before anything is asked: no read, no member, no skip, and no end of
+    // the stream.
+    decoder.filled(BLOCK);
+    decoder.filled(0);
     decoder.data_read(7);
     decoder.skipped(7);
     assert_eq!(decoder.offset(), 0);
     assert_eq!(decoder.data().unwrap(), Chunk::End);
     assert_eq!(decoder.data_remaining(), 0);
 
-    fill(&mut decoder, &archive[..BLOCK]);
+    // A read answered in part, then reported again without asking again.
+    let Step::Read(buf) = decoder.step().unwrap() else {
+        panic!("a read asked for");
+    };
+    buf[..100].copy_from_slice(&archive[..100]);
+    decoder.filled(100);
+    decoder.filled(100);
+    assert_eq!(decoder.offset(), 100);
+
+    fill(&mut decoder, &archive[100..BLOCK]);
     assert_eq!(asked(&mut decoder), Asked::Entry(b"a".to_vec()));
     // A fill with no read asked for, a skip with none, and data reported
     // without asking what it holds.
@@ -274,40 +286,49 @@ fn the_stream_ending_inside_data_is_refused_where_it_ends() {
 #[test]
 fn finish_refuses_at_the_same_offset_however_reads_are_split() {
     // The archive ends just past its first zero block, at 1536; 5000 zeros
-    // follow, at Compatible padding, and a limit of 1000 is passed at 2537,
-    // just past the first byte over it.
+    // follow, and a limit is passed just past the first byte over it, at
+    // both levels. Strict reads the block after the first zero block before
+    // `finish` counts, so a limit below 512 is over within that block.
     let archive = Tar::new().file("a", b"x").finish();
     let padded = [&archive[..], &[0; 5000]].concat();
-    for most in [1, 7, 511, 512, 513, 4096, usize::MAX] {
-        let mut decoder = Decoder::new().with_level(Level::Compatible);
-        decoder.finish(1000);
-        let mut rest = &padded[..];
-        let err = loop {
-            match decoder.step() {
-                Ok(Step::Read(buf)) => {
-                    let count = buf.len().min(rest.len()).min(most);
-                    buf[..count].copy_from_slice(&rest[..count]);
-                    rest = &rest[count..];
-                    decoder.filled(count);
-                }
-                Ok(Step::Skip(count)) => {
-                    let count = (count as usize).min(rest.len()).min(most);
-                    rest = &rest[count..];
-                    decoder.skipped(count as u64);
-                }
-                Ok(Step::Entry(_)) => panic!("finishing delivers no member"),
-                Ok(Step::End) => panic!("more than the limit follows"),
-                Err(err) => break err,
+    for level in [Level::Strict, Level::Compatible] {
+        for limit in [0, 100, 511, 512, 1000] {
+            for most in [1, 7, 511, 512, 513, 4096, usize::MAX] {
+                let mut decoder = Decoder::new().with_level(level);
+                decoder.finish(limit);
+                let mut rest = &padded[..];
+                let err = loop {
+                    match decoder.step() {
+                        Ok(Step::Read(buf)) => {
+                            let count = buf.len().min(rest.len()).min(most);
+                            buf[..count].copy_from_slice(&rest[..count]);
+                            rest = &rest[count..];
+                            decoder.filled(count);
+                        }
+                        Ok(Step::Skip(count)) => {
+                            let count = (count as usize).min(rest.len()).min(most);
+                            rest = &rest[count..];
+                            decoder.skipped(count as u64);
+                        }
+                        Ok(Step::Entry(_)) => panic!("finishing delivers no member"),
+                        Ok(Step::End) => panic!("more than the limit follows"),
+                        Err(err) => break err,
+                    }
+                };
+                let want = (&ErrorKind::TrailingLimit { limit }, 1536 + limit + 1);
+                assert_eq!(
+                    (err.kind(), err.offset()),
+                    want,
+                    "{level:?}, limit {limit}, reads of at most {most}"
+                );
             }
-        };
-        let want = (&ErrorKind::TrailingLimit { limit: 1000 }, 1536 + 1001);
-        assert_eq!((err.kind(), err.offset()), want, "reads of at most {most}");
+            let err = Reader::new(&padded[..])
+                .with_level(level)
+                .finish(limit)
+                .unwrap_err();
+            assert_eq!(err.offset(), 1536 + limit + 1, "{level:?}, limit {limit}");
+        }
     }
-    let err = Reader::new(&padded[..])
-        .with_level(Level::Compatible)
-        .finish(1000)
-        .unwrap_err();
-    assert_eq!(err.offset(), 1536 + 1001);
 }
 
 /// A source whose every other read is not ready, and which delivers at most

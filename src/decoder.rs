@@ -130,6 +130,9 @@ pub struct Decoder {
     block: [u8; BLOCK],
     /// How much of `block` has been filled.
     filled: usize,
+    /// Set when [`step`](Self::step) answers [`Step::Read`], until
+    /// [`filled`](Self::filled) answers it.
+    reading: bool,
     /// Set by a count of zero: the stream has ended.
     ended: bool,
     /// The limit [`finish`](Self::finish) set, until the archive's end is
@@ -343,6 +346,7 @@ impl Decoder {
             want: Want::Block { at: 0 },
             block: [0; BLOCK],
             filled: 0,
+            reading: false,
             ended: false,
             finish: None,
             failed: None,
@@ -385,7 +389,10 @@ impl Decoder {
             return Err(Error::new(*offset, kind.clone()));
         }
         match self.advance() {
-            Ok(Ready::Read) => Ok(Step::Read(self.window())),
+            Ok(Ready::Read) => {
+                self.reading = true;
+                Ok(Step::Read(self.window()))
+            }
             Ok(Ready::Skip(count)) => Ok(Step::Skip(count)),
             Ok(Ready::Entry(entry)) => Ok(Step::Entry(entry)),
             Ok(Ready::End) => Ok(Step::End),
@@ -397,9 +404,13 @@ impl Decoder {
     /// the buffer [`Step::Read`] lent. A `count` of zero reports that the
     /// stream has ended.
     ///
-    /// A count beyond the buffer's length is taken as its length. Without a
-    /// [`Step::Read`] to answer, it does nothing.
+    /// A count beyond the buffer's length is taken as its length. Each
+    /// [`Step::Read`] is answered once. Without one to answer, before the
+    /// first or after its answer, it does nothing.
     pub fn filled(&mut self, count: usize) {
+        if !core::mem::take(&mut self.reading) {
+            return;
+        }
         let room = match &self.want {
             Want::Block { .. } => BLOCK.saturating_sub(self.filled),
             Want::Trailing { remaining, .. } => {
@@ -706,10 +717,16 @@ impl Decoder {
                     };
                     // What follows the archive counts from just past its
                     // first zero block; at Strict the parser has read a block
-                    // past it already.
-                    let past = self.offset.saturating_sub(self.parser.end());
+                    // past it already. Where that block is over the limit,
+                    // the refusal is where it would be had the block been
+                    // read here: just past the first byte over the limit.
+                    let end = self.parser.end();
+                    let past = self.offset.saturating_sub(end);
                     let remaining = limit.checked_sub(past).ok_or_else(|| {
-                        Error::new(self.offset, ErrorKind::TrailingLimit { limit })
+                        Error::new(
+                            end.saturating_add(limit).saturating_add(1),
+                            ErrorKind::TrailingLimit { limit },
+                        )
                     })?;
                     self.filled = 0;
                     self.want = Want::Trailing {
