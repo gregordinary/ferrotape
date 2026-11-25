@@ -274,16 +274,42 @@ fn checksum_matches(block: &[u8; BLOCK]) -> bool {
     let Ok(stored) = octal(field) else {
         return false;
     };
-    let bytes = || {
-        block
+    // Each sum is taken over the whole block, then the field's bytes are
+    // replaced by spaces, which a loop over the block alone computes faster
+    // than one that asks of each byte whether it is the field's. A sum is at
+    // most 512 * 255 either way, so none can overflow.
+    let unsigned = |bytes: &[u8]| bytes.iter().map(|byte| i64::from(*byte)).sum::<i64>();
+    let signed = |bytes: &[u8]| {
+        bytes
             .iter()
-            .enumerate()
-            .map(|(at, byte)| if CHECKSUM.contains(&at) { b' ' } else { *byte })
+            .map(|byte| i64::from(byte.cast_signed()))
+            .sum::<i64>()
     };
-    // At most 512 * 255 either way, so neither sum can overflow.
-    let unsigned: i64 = bytes().map(i64::from).sum();
-    let signed: i64 = bytes().map(|byte| i64::from(byte.cast_signed())).sum();
-    stored == unsigned || stored == signed
+    let spaces = unsigned(b"        ");
+    let read_as_spaces =
+        |block_sum: i64, field_sum: i64| block_sum.saturating_sub(field_sum).saturating_add(spaces);
+    stored == read_as_spaces(i64::from(byte_sum(block)), unsigned(field))
+        || stored == read_as_spaces(signed(block), signed(field))
+}
+
+/// The sum of a block's bytes, taken eight at a time. A word's bytes are
+/// added in pairs into four 16-bit lanes, which 64 words cannot overflow
+/// (64 * 2 * 255 is below 2^16), and the lanes are added at the end.
+fn byte_sum(block: &[u8; BLOCK]) -> u32 {
+    const LOW: u64 = 0x00ff_00ff_00ff_00ff;
+    let (words, _) = block.as_chunks::<8>();
+    let lanes = words.iter().fold(0u64, |lanes, word| {
+        let word = u64::from_le_bytes(*word);
+        lanes
+            .wrapping_add(word & LOW)
+            .wrapping_add(word.wrapping_shr(8) & LOW)
+    });
+    let bytes = lanes.to_le_bytes();
+    let (lanes, _) = bytes.as_chunks::<2>();
+    lanes
+        .iter()
+        .map(|lane| u32::from(u16::from_le_bytes(*lane)))
+        .sum()
 }
 
 /// A text field: the bytes up to the first NUL.
@@ -596,7 +622,7 @@ impl Draft {
     pub(crate) fn seal(mut self) -> [u8; BLOCK] {
         self.block[CHECKSUM].fill(b' ');
         // At most 512 * 255, which six octal digits hold.
-        let sum: u64 = self.block.iter().copied().map(u64::from).sum();
+        let sum = u64::from(byte_sum(&self.block));
         let mut field = *b"000000\0 ";
         if let Some(digits) = field.get_mut(..6) {
             put_digits(digits, sum);
