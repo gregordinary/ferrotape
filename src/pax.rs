@@ -314,21 +314,119 @@ impl Applied {
     }
 }
 
-/// Reads a member's extended header: every record framed, and the ones the
-/// reader applies read.
-pub(crate) fn parse(data: Vec<u8>, level: Level) -> Result<(PaxRecords, Applied), ErrorKind> {
+/// Reads a member's extended header: every record framed, the ones the
+/// reader applies read, and the ones it checks the member against noted.
+pub(crate) fn parse(data: Vec<u8>, level: Level) -> Result<(PaxRecords, Applied, Held), ErrorKind> {
     let mut applied = Applied::default();
+    let mut seen = Seen::default();
     for record in framed(&data) {
         let (keyword, value) = record?;
         apply(&mut applied, keyword, value)?;
+        seen.record(keyword, value);
     }
     if level == Level::Strict {
-        check_repeats(&data)?;
+        check_repeats(&data, seen.next)?;
     }
-    check_xattrs(&data)?;
-    check_selinux(&data)?;
-    check_charset(&data)?;
-    Ok((PaxRecords { data }, applied))
+    check_xattrs(&data, &seen)?;
+    check_selinux(&seen.selinux)?;
+    check_charset(&seen)?;
+    let held = seen.held;
+    Ok((PaxRecords { data }, applied, held))
+}
+
+/// Which records a member's extended header holds that the reader checks
+/// the member against. They are noted as the header is read, so that the
+/// member is checked without framing its records again.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Held {
+    /// A record of a pax sparse member, its keyword beginning `GNU.sparse.`.
+    pub(crate) sparse: bool,
+    /// A `SCHILY.realsize` record.
+    pub(crate) real_size: bool,
+    /// A `SCHILY.acl.default` record.
+    pub(crate) default_acl: bool,
+}
+
+/// What the checks after a member's extended header is read need of its
+/// records, gathered as each is read, so that the records are framed once
+/// for all of them.
+#[derive(Default)]
+struct Seen<'a> {
+    /// The index of the next record: how many have been read.
+    next: usize,
+    held: Held,
+    /// The first `SCHILY.xattr.` record whose name or value [`check_xattrs`]
+    /// refuses, as its refusal.
+    xattr: Option<ErrorKind>,
+    /// Whether a `LIBARCHIVE.xattr.` record is held.
+    libarchive: bool,
+    selinux: Selinux<'a>,
+    /// The value of the first `hdrcharset` record [`check_charset`] refuses.
+    charset: Option<&'a [u8]>,
+}
+
+/// The records of the attribute `security.selinux`, for [`check_selinux`].
+#[derive(Default)]
+struct Selinux<'a> {
+    /// Whether a `SCHILY.xattr.` or `LIBARCHIVE.xattr.` record of it is
+    /// held.
+    beside: bool,
+    /// The first `RHT.security.selinux` record's value.
+    rht: Option<&'a [u8]>,
+    /// How many `RHT.security.selinux` records are held.
+    rht_count: usize,
+    /// Whether every `RHT.security.selinux` record holds the first's value.
+    rht_alike: bool,
+    /// The index of the last `RHT.security.selinux` record.
+    rht_last: usize,
+    /// The last `SCHILY.xattr.security.selinux` record: its index and value.
+    schily: Option<(usize, &'a [u8])>,
+}
+
+impl<'a> Seen<'a> {
+    /// Notes the next record, `keyword=value`, framed.
+    fn record(&mut self, keyword: &'a [u8], value: &'a [u8]) {
+        const RHT: &[u8] = b"RHT.security.selinux";
+        const SCHILY: &[u8] = b"SCHILY.xattr.security.selinux";
+        const LIBARCHIVE: &[u8] = b"LIBARCHIVE.xattr.security.selinux";
+        let at = self.next;
+        self.next = at.saturating_add(1);
+        if let Some(spelled) = keyword.strip_prefix(XATTR) {
+            if self.xattr.is_none() {
+                self.xattr = xattr_flaw(keyword, spelled, value);
+            }
+            if keyword == SCHILY {
+                self.selinux.beside = true;
+                self.selinux.schily = Some((at, value));
+            }
+        } else if keyword.starts_with(LIBARCHIVE_XATTR) {
+            self.libarchive = true;
+            if keyword == LIBARCHIVE {
+                self.selinux.beside = true;
+            }
+        } else if keyword == RHT {
+            let selinux = &mut self.selinux;
+            match selinux.rht {
+                None => {
+                    selinux.rht = Some(value);
+                    selinux.rht_alike = true;
+                }
+                Some(first) => selinux.rht_alike &= first == value,
+            }
+            selinux.rht_count = selinux.rht_count.saturating_add(1);
+            selinux.rht_last = at;
+        } else if keyword == b"hdrcharset" {
+            if self.charset.is_none() && value != b"BINARY" && value != b"ISO-IR 10646 2000 UTF-8" {
+                self.charset = Some(value);
+            }
+        } else if keyword.starts_with(SPARSE) {
+            self.held.sparse = true;
+        } else if keyword == b"SCHILY.realsize" {
+            self.held.real_size = true;
+        } else if keyword == b"SCHILY.acl.default" {
+            self.held.default_acl = true;
+        }
+    }
 }
 
 /// Reads a global extended header as `mode` reads one: every record framed,
@@ -339,8 +437,10 @@ pub(crate) fn parse_global(
     level: Level,
 ) -> Result<(PaxRecords, Applied), ErrorKind> {
     let mut applied = Applied::default();
+    let mut count: usize = 0;
     for record in framed(&data) {
         let (keyword, value) = record?;
+        count = count.saturating_add(1);
         // bsdtar fails on a sparse record in a global header, and Go reads the
         // next member as a file of its stored data.
         if keyword.starts_with(SPARSE) {
@@ -399,7 +499,7 @@ pub(crate) fn parse_global(
     // GNU tar applies the first of a keyword a global header repeats, and
     // Python the last, so applying one is refused at both levels.
     if level == Level::Strict || mode == GlobalHeaders::Apply {
-        check_repeats(&data)?;
+        check_repeats(&data, count)?;
     }
     Ok((PaxRecords { data }, applied))
 }
@@ -425,19 +525,20 @@ fn framed(data: &[u8]) -> impl Iterator<Item = Result<Record<'_>, ErrorKind>> {
     })
 }
 
-/// Refuses a keyword `data`, records already framed, holds twice with
-/// different values.
+/// Refuses a keyword `data`, its `count` records already framed, holds twice
+/// with different values.
 ///
 /// POSIX gives the last record precedence and the reader takes it, but one
 /// reader in wide use takes the first ([`ErrorKind::RepeatedKeyword`]). Any
 /// keyword counts, a vendor's included: the records reach the caller, who can
 /// read either. The records are sorted rather than compared pairwise, so the
 /// time taken grows with the header's length and not its square.
-fn check_repeats(data: &[u8]) -> Result<(), ErrorKind> {
-    let mut records: Vec<Record<'_>> = (Records { rest: data }).collect();
-    if records.len() < 2 {
+fn check_repeats(data: &[u8], count: usize) -> Result<(), ErrorKind> {
+    if count < 2 {
         return Ok(());
     }
+    let mut records: Vec<Record<'_>> = Vec::with_capacity(count);
+    records.extend(Records { rest: data });
     records.sort_unstable();
     for pair in records.windows(2) {
         if let [(keyword, value), (next_keyword, next_value)] = pair
@@ -452,8 +553,8 @@ fn check_repeats(data: &[u8]) -> Result<(), ErrorKind> {
     Ok(())
 }
 
-/// Refuses extended attribute records, `data`'s records already framed, that
-/// the readers extract as different attributes.
+/// Refuses extended attribute records, of `data`'s records, already framed
+/// and noted in `seen`, that the readers extract as different attributes.
 ///
 /// GNU tar reads a `SCHILY.xattr.` name with `%3D` and `%25` undone, where
 /// bsdtar and Go read it as spelled. No reader extracts an attribute with an
@@ -466,61 +567,83 @@ fn check_repeats(data: &[u8]) -> Result<(), ErrorKind> {
 /// ([`ErrorKind::XattrConflict`]).
 ///
 /// GNU tar keeps the last value, and bsdtar applies every record of the name
-/// in turn, so the two readers agree whatever the order. The `SCHILY.xattr.`
-/// records are sorted rather than searched once for each, so the time taken
-/// grows with the header's length and not its square.
-fn check_xattrs(data: &[u8]) -> Result<(), ErrorKind> {
-    let mut libarchive = false;
-    for (keyword, value) in (Records { rest: data }) {
-        if let Some(spelled) = keyword.strip_prefix(XATTR) {
-            let escapes = spelled
-                .windows(3)
-                .any(|escape| escape == b"%3D" || escape == b"%25");
-            if escapes || spelled.is_empty() {
-                return Err(ErrorKind::XattrName {
-                    keyword: keyword.to_vec(),
-                });
-            }
-            if value.is_empty() {
-                return Err(ErrorKind::EmptyXattr {
-                    keyword: keyword.to_vec(),
-                });
-            }
-        } else if keyword.starts_with(LIBARCHIVE_XATTR) {
-            libarchive = true;
-        }
+/// in turn, so the two readers agree whatever the order. The names of the
+/// `LIBARCHIVE.xattr.` records are sorted, and each `SCHILY.xattr.` record
+/// finds its name among them by a binary search, rather than each searching
+/// the records, so the time taken grows with the header's length and not its
+/// square.
+fn check_xattrs(data: &[u8], seen: &Seen<'_>) -> Result<(), ErrorKind> {
+    if let Some(flaw) = &seen.xattr {
+        return Err(flaw.clone());
     }
-    if !libarchive {
+    if !seen.libarchive {
         return Ok(());
     }
-    // A stable sort keeps the archive's order among records of one name, so
-    // the last of each run is the record that holds.
-    let mut attributes: Vec<Record<'_>> = (Records { rest: data })
-        .filter_map(|(keyword, value)| Some((keyword.strip_prefix(XATTR)?, value)))
+    // `records` holds the `LIBARCHIVE.xattr.` records, each its name and
+    // value, in the archive's order, and `names` the same sorted. Beside the
+    // first of each name in `names`, `holding` notes the value of the last
+    // `SCHILY.xattr.` record of the name, in a pass in the archive's order.
+    // The pairs are sorted whole, as `check_repeats` sorts its records,
+    // rather than by name alone, so the build holds one sort's code.
+    let records: Vec<Record<'_>> = (Records { rest: data })
+        .filter_map(|(keyword, value)| Some((keyword.strip_prefix(LIBARCHIVE_XATTR)?, value)))
         .collect();
-    attributes.sort_by_key(|(name, _)| *name);
-    for (keyword, encoded) in (Records { rest: data }) {
-        let Some(name) = keyword.strip_prefix(LIBARCHIVE_XATTR) else {
-            continue;
-        };
-        let run_end = attributes.partition_point(|(spelled, _)| *spelled <= name);
-        let holding = run_end
-            .checked_sub(1)
-            .and_then(|last| attributes.get(last))
-            .filter(|(spelled, _)| *spelled == name);
+    let mut names = records.clone();
+    names.sort_unstable();
+    let first_of = |name: &[u8]| {
+        let at = names.partition_point(|(spelled, _)| *spelled < name);
+        names
+            .get(at)
+            .filter(|(spelled, _)| *spelled == name)
+            .map(|_| at)
+    };
+    let mut holding: Vec<Option<&[u8]>> = Vec::new();
+    holding.resize(names.len(), None);
+    for (keyword, value) in (Records { rest: data }) {
+        if let Some(slot) = keyword
+            .strip_prefix(XATTR)
+            .and_then(first_of)
+            .and_then(|at| holding.get_mut(at))
+        {
+            *slot = Some(value);
+        }
+    }
+    for (name, encoded) in &records {
+        let holds = first_of(name).and_then(|at| holding.get(at).copied().flatten());
         let repeats =
-            !name.contains(&b'%') && holding.is_some_and(|(_, value)| is_base64_of(encoded, value));
+            !name.contains(&b'%') && holds.is_some_and(|value| is_base64_of(encoded, value));
         if !repeats {
             return Err(ErrorKind::XattrConflict {
-                keyword: keyword.to_vec(),
+                keyword: [LIBARCHIVE_XATTR, name].concat(),
             });
         }
     }
     Ok(())
 }
 
-/// Refuses an `RHT.security.selinux` record, `data`'s records already
-/// framed, that the readers apply differently ([`ErrorKind::SelinuxConflict`]).
+/// The refusal of a `SCHILY.xattr.` record, `keyword`, naming the attribute
+/// `spelled` with `value`, that the readers extract as different attributes:
+/// see [`check_xattrs`]. `None` where they extract it alike.
+fn xattr_flaw(keyword: &[u8], spelled: &[u8], value: &[u8]) -> Option<ErrorKind> {
+    let escapes = spelled
+        .windows(3)
+        .any(|escape| escape == b"%3D" || escape == b"%25");
+    if escapes || spelled.is_empty() {
+        return Some(ErrorKind::XattrName {
+            keyword: keyword.to_vec(),
+        });
+    }
+    if value.is_empty() {
+        return Some(ErrorKind::EmptyXattr {
+            keyword: keyword.to_vec(),
+        });
+    }
+    None
+}
+
+/// Refuses an `RHT.security.selinux` record, of the records `selinux`
+/// describes, that the readers apply differently
+/// ([`ErrorKind::SelinuxConflict`]).
 ///
 /// The record is a second spelling of the attribute `security.selinux`. GNU
 /// tar applies it only with `--selinux`, after any `SCHILY.xattr.` record of
@@ -536,54 +659,45 @@ fn check_xattrs(data: &[u8]) -> Result<(), ErrorKind> {
 /// context, and no reader applies another label. Where SELinux is enforcing,
 /// the kernel stores the context with one NUL, whichever spelling it is
 /// given. The record must be given once, hold a context, and hold no NUL.
-fn check_selinux(data: &[u8]) -> Result<(), ErrorKind> {
-    const RHT: &[u8] = b"RHT.security.selinux";
-    const SCHILY: &[u8] = b"SCHILY.xattr.security.selinux";
-    const LIBARCHIVE: &[u8] = b"LIBARCHIVE.xattr.security.selinux";
-    let mut alone = (Records { rest: data }).filter(|(keyword, _)| *keyword == RHT);
-    let beside =
-        (Records { rest: data }).any(|(keyword, _)| keyword == SCHILY || keyword == LIBARCHIVE);
-    if !beside {
-        return match (alone.next(), alone.next()) {
-            (None, _) => Ok(()),
-            (Some((_, value)), None) if !value.is_empty() && !value.contains(&0) => Ok(()),
-            _ => Err(ErrorKind::SelinuxConflict),
+fn check_selinux(selinux: &Selinux<'_>) -> Result<(), ErrorKind> {
+    let Some(rht) = selinux.rht else {
+        return Ok(());
+    };
+    if !selinux.beside {
+        return if selinux.rht_count == 1 && !rht.is_empty() && !rht.contains(&0) {
+            Ok(())
+        } else {
+            Err(ErrorKind::SelinuxConflict)
         };
     }
-    let last = (Records { rest: data })
-        .enumerate()
-        .filter(|(_, (keyword, _))| *keyword == SCHILY)
-        .last()
-        .map(|(at, (_, value))| (at, value));
-    for (at, (keyword, value)) in (Records { rest: data }).enumerate() {
-        if keyword != RHT {
-            continue;
-        }
-        let repeated = last.is_some_and(|(schily_at, schily)| {
-            schily_at > at && schily.strip_suffix(b"\0") == Some(value)
+    // Each `RHT.security.selinux` record must come before the last
+    // `SCHILY.xattr.` record of the attribute and hold its context, without
+    // its NUL: so every one holds the first's value, and the last of them
+    // comes before it.
+    let repeated = selinux.rht_alike
+        && selinux.schily.is_some_and(|(schily_at, schily)| {
+            schily_at > selinux.rht_last && schily.strip_suffix(b"\0") == Some(rht)
         });
-        if !repeated {
-            return Err(ErrorKind::SelinuxConflict);
-        }
+    if repeated {
+        Ok(())
+    } else {
+        Err(ErrorKind::SelinuxConflict)
     }
-    Ok(())
 }
 
-/// Refuses a `hdrcharset` record, `data`'s records already framed, naming
+/// Refuses a `hdrcharset` record, of the records `seen` describes, naming
 /// neither of POSIX's two character sets ([`ErrorKind::UnknownCharset`]).
 ///
 /// bsdtar reports another value as an error. It then reads a `path` ending in
 /// `/` over a regular file as a regular file. GNU tar, which ignores the
 /// record, reads a directory.
-fn check_charset(data: &[u8]) -> Result<(), ErrorKind> {
-    for (keyword, value) in (Records { rest: data }) {
-        if keyword == b"hdrcharset" && value != b"BINARY" && value != b"ISO-IR 10646 2000 UTF-8" {
-            return Err(ErrorKind::UnknownCharset {
-                value: value.to_vec(),
-            });
-        }
+fn check_charset(seen: &Seen<'_>) -> Result<(), ErrorKind> {
+    match seen.charset {
+        Some(value) => Err(ErrorKind::UnknownCharset {
+            value: value.to_vec(),
+        }),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Whether `encoded` is `bytes` in standard base64, with its padding or
@@ -815,8 +929,8 @@ pub(crate) fn push_record(out: &mut Vec<u8>, keyword: &[u8], value: &[u8]) -> Op
 
 /// The first record of `rest`, which is not empty, and the bytes after it.
 fn split_record(rest: &[u8]) -> Result<(Record<'_>, &[u8]), PaxFraming> {
-    let (length, _) = split_once(rest, b' ').ok_or(PaxFraming::NoDelimiter)?;
-    let length = match decimal(length) {
+    let (digits, _) = split_once(rest, b' ').ok_or(PaxFraming::NoDelimiter)?;
+    let length = match decimal(digits) {
         Ok(length) => usize::try_from(length).map_err(|_| PaxFraming::LengthOutOfBounds)?,
         Err(Numeric::Unreadable) => return Err(PaxFraming::BadLength),
         Err(Numeric::OutOfRange) => return Err(PaxFraming::LengthOutOfBounds),
@@ -827,10 +941,11 @@ fn split_record(rest: &[u8]) -> Result<(Record<'_>, &[u8]), PaxFraming> {
     let (record, after) = rest
         .split_at_checked(length)
         .ok_or(PaxFraming::LengthOutOfBounds)?;
-    let line = match split_once(record, b' ') {
-        Some((_, line)) if !line.is_empty() => line,
-        _ => return Err(PaxFraming::LengthOutOfBounds),
-    };
+    // The record begins with the length's digits and the space after them.
+    let line = record
+        .get(digits.len().saturating_add(1)..)
+        .filter(|line| !line.is_empty())
+        .ok_or(PaxFraming::LengthOutOfBounds)?;
     let line = line.strip_suffix(b"\n").ok_or(PaxFraming::NoNewline)?;
     let field = split_once(line, b'=').ok_or(PaxFraming::NoEquals)?;
     let keyword = field.0;
@@ -854,6 +969,7 @@ fn split_record(rest: &[u8]) -> Result<(Record<'_>, &[u8]), PaxFraming> {
 
 /// `bytes` split at the first `delimiter`, which neither part holds.
 fn split_once(bytes: &[u8], delimiter: u8) -> Option<(&[u8], &[u8])> {
-    let mut parts = bytes.splitn(2, |byte| *byte == delimiter);
-    Some((parts.next()?, parts.next()?))
+    let at = bytes.iter().position(|byte| *byte == delimiter)?;
+    let (before, from) = bytes.split_at_checked(at)?;
+    Some((before, from.get(1..)?))
 }

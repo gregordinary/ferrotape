@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 use crate::entry::{Entry, EntryKind, Timestamp};
 use crate::error::{Error, ErrorKind, Keyword, Metadata, SparseFlaw, Truncation};
 use crate::header::{self, BLOCK, Fields, Flaw};
-use crate::pax::{self, Applied, PaxRecords};
+use crate::pax::{self, Applied, Held, PaxRecords};
 use crate::settings::{GlobalHeaders, Level, Limits};
 use crate::sparse::{self, MapReader, PaxForm, Region};
 
@@ -123,7 +123,7 @@ enum MapSource {
 struct Pending {
     long_name: Option<Vec<u8>>,
     long_link: Option<Vec<u8>>,
-    pax: Option<(PaxRecords, Applied)>,
+    pax: Option<(PaxRecords, Applied, Held)>,
     global: Option<PaxRecords>,
 }
 
@@ -403,7 +403,7 @@ impl Parser {
         let refuse = |kind| Error::new(at, kind);
         let flawed = |flaw| Error::new(at, ErrorKind::Sparse(flaw));
         let pending = core::mem::take(&mut self.pending);
-        let (records, own) = pending.pax.unwrap_or_default();
+        let (records, own, held) = pending.pax.unwrap_or_default();
         // A link target of the member's own, from a long link or a pax record
         // rather than its header. A global one is applied only for GNU tar
         // and Python, which pass over a target on a member that is not a link.
@@ -426,7 +426,11 @@ impl Parser {
         let link_target = header.link_target(stated_link);
         let declared_size = applied.size.unwrap_or(header.size);
 
-        let pax_sparse = sparse::pax(&records).map_err(flawed)?;
+        let pax_sparse = if held.sparse {
+            sparse::pax(&records).map_err(flawed)?
+        } else {
+            None
+        };
         let old_sparse = header.typeflag == b'S';
         if old_sparse || pax_sparse.is_some() {
             // `tar` reads a pax sparse member as a regular member of its
@@ -530,6 +534,7 @@ impl Parser {
         if matches!(kind, EntryKind::File | EntryKind::HardLink)
             && !old_sparse
             && pax_sparse.is_none()
+            && held.real_size
         {
             let states_size = |value: &[u8]| pax::decimal(value) == Ok(declared_size);
             if records
@@ -571,7 +576,7 @@ impl Parser {
         // A default list is a directory's. bsdtar takes the mode of any other
         // member with one from the lists' text, `000`, where GNU tar, Go
         // and Python read the header's.
-        if kind != EntryKind::Directory && records.get(b"SCHILY.acl.default").is_some() {
+        if kind != EntryKind::Directory && held.default_acl {
             return Err(refuse(ErrorKind::DefaultAclWithoutDirectory { kind }));
         }
         // GNU tar links an empty target as `.`, the others as the empty name.

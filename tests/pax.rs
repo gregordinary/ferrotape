@@ -689,6 +689,28 @@ fn an_attribute_name_the_readers_extract_differently_is_refused() {
             );
         }
     }
+    // Of two such records, the refusal names the first, whichever rule each
+    // breaks.
+    let records = pax_records(&[
+        (&schily(b"user.eq%3Dsign"), b"v"),
+        (&schily(b"user.empty"), b""),
+        (&schily(b""), b"v"),
+    ]);
+    for level in [Level::Strict, Level::Compatible] {
+        assert_eq!(
+            *with_records_at(&records, level).unwrap_err().kind(),
+            ErrorKind::XattrName {
+                keyword: schily(b"user.eq%3Dsign"),
+            },
+        );
+    }
+    let records = pax_records(&[(&schily(b"user.empty"), b""), (&schily(b""), b"v")]);
+    assert_eq!(
+        *with_records(&records).unwrap_err().kind(),
+        ErrorKind::EmptyXattr {
+            keyword: schily(b"user.empty"),
+        },
+    );
     let err = with_records(&pax_record(b"SCHILY.xattr.user.eq%3Dx", b"v")).unwrap_err();
     assert_eq!(err.offset(), 0, "the extended header's own offset");
     assert_eq!(
@@ -1134,7 +1156,7 @@ fn an_selinux_label_is_read_only_in_the_form_gnu_tar_writes() {
 
     let other = b"unconfined_u:object_r:user_home_t:s0";
     let other_nul = [&other[..], b"\0"].concat();
-    let refused: [Vec<(&[u8], Vec<u8>)>; 8] = [
+    let refused: [Vec<(&[u8], Vec<u8>)>; 10] = [
         // Alone, given twice, or holding a NUL.
         vec![
             (b"RHT.security.selinux", LABEL.to_vec()),
@@ -1170,6 +1192,18 @@ fn an_selinux_label_is_read_only_in_the_form_gnu_tar_writes() {
             (b"RHT.security.selinux", LABEL.to_vec()),
             (b"SCHILY.xattr.security.selinux", with_nul.clone()),
             (b"SCHILY.xattr.security.selinux", other_nul.clone()),
+        ],
+        // Two labels, the attribute's record repeating one of them.
+        vec![
+            (b"RHT.security.selinux", LABEL.to_vec()),
+            (b"RHT.security.selinux", other.to_vec()),
+            (b"SCHILY.xattr.security.selinux", with_nul.clone()),
+        ],
+        // GNU tar's form, then the label again after it.
+        vec![
+            (b"RHT.security.selinux", LABEL.to_vec()),
+            (b"SCHILY.xattr.security.selinux", with_nul.clone()),
+            (b"RHT.security.selinux", LABEL.to_vec()),
         ],
     ];
     // Alone, as GNU tar's `--selinux` writes it on a labelled system: GNU
@@ -1263,6 +1297,17 @@ fn a_hdrcharset_naming_neither_of_posix_s_character_sets_is_refused() {
         let entry = with_records(&records).unwrap();
         assert_eq!(entry.kind(), ferrotape::EntryKind::Directory);
     }
+    // Of two, the refusal names the first. Strict refuses the repeated
+    // keyword before it.
+    let records = pax_records(&[(b"hdrcharset", b"6"), (b"hdrcharset", b"7")]);
+    assert_eq!(
+        *with_records_at(&records, Level::Compatible)
+            .unwrap_err()
+            .kind(),
+        ErrorKind::UnknownCharset {
+            value: b"6".to_vec()
+        },
+    );
     let err = with_records(&pax_record(b"hdrcharset", b"6")).unwrap_err();
     assert_eq!(
         err.to_string(),
