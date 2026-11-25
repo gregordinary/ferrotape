@@ -146,7 +146,10 @@ pub enum GlobalHeaders {
     Apply,
     /// No global header's records apply to any member, which is read from
     /// its own headers alone, as Go reads it. The records reach the caller,
-    /// to apply as it chooses.
+    /// to apply as it chooses. A global `path`, `linkpath`, `uname` or
+    /// `gname` holding a NUL is refused
+    /// ([`ErrorKind::PaxNul`](crate::ErrorKind::PaxNul)), since Go fails at
+    /// it.
     ///
     /// bsdtar read so too until libarchive 3.8.10. From that release, it
     /// refuses an archive where a global header holding any record but

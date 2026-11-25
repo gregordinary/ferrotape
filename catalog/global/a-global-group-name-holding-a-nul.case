@@ -1,0 +1,39 @@
+[statement]
+A global header after a member, its `gname` holding a NUL. bsdtar refuses
+the archive from the header on, and Go fails at it. ferrotape refuses the
+archive in every mode.
+
+[archive]
+header name=first
+data "1\n"
+global gname="a\0b"
+header name=f
+header name=after
+end
+
+[verdict]
+refuse: refused GlobalRecord at 1024
+apply: refused PaxNul at 1024
+defer: refused PaxNul at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=f size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+warning "bsdtar: Unsupported pax global extended header attribute 'gname'"
+warning "bsdtar: Error exit delayed from previous errors"
+exit 1
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname="a\0b" data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname="a\0b" data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+error "archive/tar: invalid tar header"

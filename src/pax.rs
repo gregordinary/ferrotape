@@ -361,7 +361,17 @@ pub(crate) fn parse_global(
             )
         );
         match mode {
-            GlobalHeaders::Defer => {}
+            // Go applies none of a global header's records, but fails at one
+            // whose names hold a NUL, as at a member's own.
+            GlobalHeaders::Defer => {
+                if let Some(
+                    known @ (Keyword::Path | Keyword::Linkpath | Keyword::Uname | Keyword::Gname),
+                ) = Keyword::of(keyword)
+                    && value.contains(&0)
+                {
+                    return Err(ErrorKind::PaxNul { keyword: known });
+                }
+            }
             GlobalHeaders::Apply if applies => {
                 // Every member after the header holds a copy of a text value,
                 // so its length is held to the longest a path can be.

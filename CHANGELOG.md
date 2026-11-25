@@ -155,7 +155,9 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 - A long name or long link holding no NUL whose padding begins with a byte
   that is not one.
 - A global header out of place, or holding a record its mode refuses. Where
-  its records are applied, a keyword given twice with different values.
+  its records are applied, a keyword given twice with different values. In
+  every mode, a global `path`, `linkpath`, `uname` or `gname` holding a NUL,
+  at which Go fails.
 - Typeflags `X`, `A`, `M` and `V`.
 - A header without the POSIX magic with bytes in its prefix area.
 - A GNU header that is not typeflag `S` holding old sparse slots, or a real
@@ -201,11 +203,11 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 
 ### Agreement with the reference readers
 
-- The case catalog's 282 archives. In each of the six settings, ferrotape
+- The case catalog's 284 archives. In each of the six settings, ferrotape
   gives every case its stated verdict. Wherever it reads one, it reads the
   members the readers that setting stands in for read.
-- 10,000 archives made by changing the catalog's one to three ways (9,182
-  distinct, 2,176 of them read by ferrotape in some setting). None is read
+- 10,000 archives made by changing the catalog's one to three ways (9,197
+  distinct, 2,237 of them read by ferrotape in some setting). None is read
   otherwise than by the readers its setting stands in for.
 - 4,359 tar streams in 3,993 published archives (Alpine, Debian and Gentoo
   packages and root filesystems, crates, npm packages, Python sdists,

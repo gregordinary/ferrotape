@@ -601,6 +601,44 @@ fn an_empty_global_header_is_refused_in_every_mode() {
     }
 }
 
+#[test]
+fn a_global_name_holding_a_nul_is_refused_in_every_mode() {
+    // Go fails at such a global header, Python keeps the NUL, and GNU tar
+    // cuts the name at it. Deferring applies nothing, but stands in for Go.
+    for (keyword, known) in [
+        (&b"path"[..], Keyword::Path),
+        (b"linkpath", Keyword::Linkpath),
+        (b"uname", Keyword::Uname),
+        (b"gname", Keyword::Gname),
+    ] {
+        let archive = Tar::new()
+            .file("a", b"")
+            .pax(b'g', &pax_record(keyword, b"x\0y"))
+            .file("b", b"")
+            .finish();
+        for (mode, kind) in [
+            (
+                GlobalHeaders::Refuse,
+                ErrorKind::GlobalRecord {
+                    keyword: keyword.to_vec(),
+                },
+            ),
+            (GlobalHeaders::Apply, ErrorKind::PaxNul { keyword: known }),
+            (GlobalHeaders::Defer, ErrorKind::PaxNul { keyword: known }),
+        ] {
+            let err = members(&archive, mode).unwrap_err();
+            assert_eq!((err.kind(), err.offset()), (&kind, 512), "{mode:?}");
+        }
+        // Without the NUL, deferring reads on.
+        let archive = Tar::new()
+            .file("a", b"")
+            .pax(b'g', &pax_record(keyword, b"xy"))
+            .file("b", b"")
+            .finish();
+        assert_eq!(members(&archive, GlobalHeaders::Defer).unwrap().len(), 2);
+    }
+}
+
 fn members_of(mut reader: Reader<&[u8]>) -> Result<Vec<Entry>, Error> {
     let mut entries = Vec::new();
     while let Some(entry) = reader.next_entry()? {
