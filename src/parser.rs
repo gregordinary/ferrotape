@@ -399,7 +399,7 @@ impl Parser {
     /// it applied. A pax record takes precedence over a GNU long name or long
     /// link, and either over the header's own field. A global record applies
     /// beneath the member's own, where one applies.
-    fn member(&mut self, at: u64, block: &[u8; BLOCK], header: Fields) -> Result<Step, Error> {
+    fn member(&mut self, at: u64, block: &[u8; BLOCK], header: Fields<'_>) -> Result<Step, Error> {
         let refuse = |kind| Error::new(at, kind);
         let flawed = |flaw| Error::new(at, ErrorKind::Sparse(flaw));
         let pending = core::mem::take(&mut self.pending);
@@ -413,20 +413,17 @@ impl Parser {
         // Whether the header's own name and prefix name the member, no pax
         // record or long name replacing them.
         let named_by_header = applied.path.is_none() && pending.long_name.is_none();
-        let mut path =
-            resolve(applied.path, pending.long_name, header.path, Keyword::Path).map_err(refuse)?;
+        let stated_path =
+            resolve(applied.path, pending.long_name, Keyword::Path).map_err(refuse)?;
+        let mut path = header.path(stated_path);
         // A pax record cannot state an empty name (`ErrorKind::EmptyPaxValue`),
         // so this is the header's own name or a long name.
-        if path.is_empty() {
+        if path.bytes(block).is_empty() {
             return Err(refuse(ErrorKind::EmptyName));
         }
-        let link_target = resolve(
-            applied.link_target,
-            pending.long_link,
-            header.link_target,
-            Keyword::Linkpath,
-        )
-        .map_err(refuse)?;
+        let stated_link =
+            resolve(applied.link_target, pending.long_link, Keyword::Linkpath).map_err(refuse)?;
+        let link_target = header.link_target(stated_link);
         let declared_size = applied.size.unwrap_or(header.size);
 
         let pax_sparse = sparse::pax(&records).map_err(flawed)?;
@@ -475,14 +472,17 @@ impl Parser {
             if let Some(name) = pax_sparse.as_ref().and_then(|found| found.name.as_ref()) {
                 // GNU tar and bsdtar cut a name at a NUL; Go and Python keep
                 // it.
-                if name.is_empty() || name.contains(&0) || (!named_by_header && *name != path) {
+                if name.is_empty()
+                    || name.contains(&0)
+                    || (!named_by_header && name != path.bytes(block))
+                {
                     return Err(flawed(SparseFlaw::Name));
                 }
-                path.clone_from(name);
+                path = header.path(Some(name.clone()));
             }
             // GNU tar and bsdtar extract a sparse member named so as a
             // directory, Go and Python as a file.
-            if path.last() == Some(&b'/') {
+            if path.bytes(block).last() == Some(&b'/') {
                 return Err(flawed(SparseFlaw::Name));
             }
         }
@@ -522,7 +522,7 @@ impl Parser {
         // first 100 bytes of such a path, and where the cut lands just after a
         // separator, a rule read from the field would make a regular file a
         // directory, and read its data as the next header.
-        let kind = EntryKind::of(header.typeflag, &path);
+        let kind = EntryKind::of(header.typeflag, path.bytes(block));
         // bsdtar takes a `SCHILY.realsize` record as the size of a file or a
         // hard link, where the others ignore it. Every reader takes a sparse
         // member's real size from its map, and ignores the record on any
@@ -542,7 +542,7 @@ impl Parser {
         // bsdtar takes a trailing separator to mark a directory whatever the
         // typeflag, where GNU tar and Python extract a typeflag GNU tar does
         // not know as a regular file.
-        if !gnu_knows(header.typeflag) && path.last() == Some(&b'/') {
+        if !gnu_knows(header.typeflag) && path.bytes(block).last() == Some(&b'/') {
             return Err(refuse(ErrorKind::UnknownTypeSlash {
                 typeflag: header.typeflag,
             }));
@@ -575,7 +575,7 @@ impl Parser {
             return Err(refuse(ErrorKind::DefaultAclWithoutDirectory { kind }));
         }
         // GNU tar links an empty target as `.`, the others as the empty name.
-        if kind == EntryKind::HardLink && link_target.is_empty() {
+        if kind == EntryKind::HardLink && link_target.bytes(block).is_empty() {
             return Err(refuse(ErrorKind::HardLinkWithoutTarget));
         }
         let carries_data = !matches!(header.typeflag, b'1'..=b'6');
@@ -625,8 +625,8 @@ impl Parser {
             mode: header.mode,
             uid: applied.uid.unwrap_or(header.uid),
             gid: applied.gid.unwrap_or(header.gid),
-            uname: applied.uname.unwrap_or(header.uname),
-            gname: applied.gname.unwrap_or(header.gname),
+            uname: header.uname(applied.uname),
+            gname: header.gname(applied.gname),
             size: if carries_data { declared_size } else { 0 },
             declared_size,
             mtime: applied
@@ -772,19 +772,19 @@ fn finish(
     Ok(Step::Member(entry))
 }
 
-/// The name a member takes from a pax record, a GNU long name, and its own
-/// header, in that order. Refused where the first two both state one and
-/// differ ([`ErrorKind::LongNameConflict`]).
+/// The name metadata states for a member: a pax record's, or else a GNU long
+/// name's. `None` where neither states one, and the member's own header
+/// names it. Refused where both state one and they differ
+/// ([`ErrorKind::LongNameConflict`]).
 fn resolve(
     pax: Option<Vec<u8>>,
     long: Option<Vec<u8>>,
-    own: Vec<u8>,
     keyword: Keyword,
-) -> Result<Vec<u8>, ErrorKind> {
+) -> Result<Option<Vec<u8>>, ErrorKind> {
     match (pax, long) {
         (Some(pax), Some(long)) if pax != long => Err(ErrorKind::LongNameConflict { keyword }),
-        (Some(name), _) | (None, Some(name)) => Ok(name),
-        (None, None) => Ok(own),
+        (Some(name), _) | (None, Some(name)) => Ok(Some(name)),
+        (None, None) => Ok(None),
     }
 }
 

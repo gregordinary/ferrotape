@@ -18,15 +18,15 @@ use crate::sparse::Sparse;
 #[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Entry {
-    pub(crate) path: Vec<u8>,
-    pub(crate) link_target: Vec<u8>,
+    pub(crate) path: Name,
+    pub(crate) link_target: Name,
     pub(crate) typeflag: u8,
     pub(crate) kind: EntryKind,
     pub(crate) mode: u32,
     pub(crate) uid: u32,
     pub(crate) gid: u32,
-    pub(crate) uname: Vec<u8>,
-    pub(crate) gname: Vec<u8>,
+    pub(crate) uname: Name,
+    pub(crate) gname: Name,
     pub(crate) size: u64,
     pub(crate) declared_size: u64,
     pub(crate) mtime: Timestamp,
@@ -50,14 +50,14 @@ impl Entry {
     /// and the member's own records state none.
     #[must_use]
     pub fn path(&self) -> &[u8] {
-        &self.path
+        self.path.bytes(&self.header)
     }
 
     /// A link's target: a pax `linkpath` record, a GNU long link, or the
     /// header's own link name. Empty where the archive states none.
     #[must_use]
     pub fn link_target(&self) -> &[u8] {
-        &self.link_target
+        self.link_target.bytes(&self.header)
     }
 
     /// What kind of member this is: its typeflag, as GNU tar and bsdtar read
@@ -105,14 +105,14 @@ impl Entry {
     /// Empty where the archive states none, as a v7 header cannot.
     #[must_use]
     pub fn uname(&self) -> &[u8] {
-        &self.uname
+        self.uname.bytes(&self.header)
     }
 
     /// The owning group's name: a pax `gname` record, or the header's own.
     /// Empty where the archive states none, as a v7 header cannot.
     #[must_use]
     pub fn gname(&self) -> &[u8] {
-        &self.gname
+        self.gname.bytes(&self.header)
     }
 
     /// The length of the data the reader delivers for the member, in bytes.
@@ -243,15 +243,15 @@ impl Entry {
 impl fmt::Debug for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Entry")
-            .field("path", &Escaped(&self.path))
-            .field("link_target", &Escaped(&self.link_target))
+            .field("path", &Escaped(self.path()))
+            .field("link_target", &Escaped(self.link_target()))
             .field("kind", &self.kind)
             .field("typeflag", &char::from(self.typeflag))
             .field("mode", &format_args!("{:#o}", self.mode))
             .field("uid", &self.uid)
             .field("gid", &self.gid)
-            .field("uname", &Escaped(&self.uname))
-            .field("gname", &Escaped(&self.gname))
+            .field("uname", &Escaped(self.uname()))
+            .field("gname", &Escaped(self.gname()))
             .field("size", &self.size)
             .field("declared_size", &self.declared_size)
             .field("mtime", &self.mtime)
@@ -264,6 +264,48 @@ impl fmt::Debug for Entry {
             .field("pax_records", &self.pax)
             .field("global", &self.global)
             .finish_non_exhaustive()
+    }
+}
+
+/// A name a member holds: its path, its link target, or its owner's or
+/// group's name. Where the member's own header block holds exactly the name,
+/// it is a range of the block rather than a copy. Otherwise (a long name, a
+/// pax record, a name joined to its prefix) it is bytes of its own. Which
+/// form a name takes follows from its value and the block alone, so two
+/// members alike in every field and in their blocks hold their names alike,
+/// and compare equal.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Name {
+    /// `len` bytes of the header block from `start`.
+    InBlock { start: u16, len: u16 },
+    /// Bytes of its own.
+    Own(Vec<u8>),
+}
+
+impl Name {
+    /// `len` bytes of the header block from `start`, or `None` where they
+    /// are not within it.
+    pub(crate) fn in_block(start: usize, len: usize) -> Option<Name> {
+        if start.checked_add(len)? > BLOCK {
+            return None;
+        }
+        Some(Name::InBlock {
+            start: u16::try_from(start).ok()?,
+            len: u16::try_from(len).ok()?,
+        })
+    }
+
+    /// The name's bytes, `block` being the header block of its member.
+    pub(crate) fn bytes<'a>(&'a self, block: &'a [u8; BLOCK]) -> &'a [u8] {
+        match self {
+            Name::InBlock { start, len } => {
+                let start = usize::from(*start);
+                block
+                    .get(start..start.saturating_add(usize::from(*len)))
+                    .unwrap_or_default()
+            }
+            Name::Own(bytes) => bytes,
+        }
     }
 }
 

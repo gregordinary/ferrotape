@@ -11,6 +11,7 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 
+use crate::entry::Name;
 use crate::error::{HeaderField, Numeric};
 
 /// The size of a block, and of a header.
@@ -65,12 +66,16 @@ pub(crate) enum Magic {
 }
 
 /// What one header block states, before any metadata member before it is
-/// applied.
+/// applied. Its text fields are the block's bytes, so a field that metadata
+/// replaces, or a metadata member's own, is never copied.
 #[derive(Debug)]
-pub(crate) struct Fields {
-    /// The name, the POSIX prefix joined onto it.
-    pub(crate) path: Vec<u8>,
-    pub(crate) link_target: Vec<u8>,
+pub(crate) struct Fields<'a> {
+    /// The name.
+    name: &'a [u8],
+    /// The POSIX prefix, which [`path`](Self::path) joins onto the name.
+    /// Empty where there is none.
+    prefix: &'a [u8],
+    link_target: &'a [u8],
     /// The typeflag as the block holds it: a v7 regular file's is NUL.
     pub(crate) typeflag: u8,
     /// The permission bits, setuid, setgid and sticky included.
@@ -78,9 +83,9 @@ pub(crate) struct Fields {
     pub(crate) uid: u32,
     pub(crate) gid: u32,
     /// Empty in a v7 header, which has no field for it.
-    pub(crate) uname: Vec<u8>,
+    uname: &'a [u8],
     /// Empty in a v7 header, which has no field for it.
-    pub(crate) gname: Vec<u8>,
+    gname: &'a [u8],
     pub(crate) size: u64,
     pub(crate) mtime: i64,
     /// The device numbers, major and minor, where the header has fields for
@@ -109,6 +114,42 @@ pub(crate) struct Fields {
     pub(crate) exact_magic: bool,
 }
 
+impl Fields<'_> {
+    /// A member's path: `stated` by metadata, or else the header's own, the
+    /// name with the POSIX prefix joined onto it.
+    pub(crate) fn path(&self, stated: Option<Vec<u8>>) -> Name {
+        if self.prefix.is_empty() {
+            return in_block(NAME.start, self.name, stated);
+        }
+        Name::Own(stated.unwrap_or_else(|| [self.prefix, b"/", self.name].concat()))
+    }
+
+    /// A member's link target: `stated` by metadata, or else the header's.
+    pub(crate) fn link_target(&self, stated: Option<Vec<u8>>) -> Name {
+        in_block(LINKNAME.start, self.link_target, stated)
+    }
+
+    /// A member's owner's name: `stated` by metadata, or else the header's.
+    pub(crate) fn uname(&self, stated: Option<Vec<u8>>) -> Name {
+        in_block(UNAME.start, self.uname, stated)
+    }
+
+    /// A member's group's name: `stated` by metadata, or else the header's.
+    pub(crate) fn gname(&self, stated: Option<Vec<u8>>) -> Name {
+        in_block(GNAME.start, self.gname, stated)
+    }
+}
+
+/// A member's name: the value `stated` by metadata, or else the block's own
+/// field, `own`, at `start` in the block. A range of the block wherever the
+/// block's field holds exactly the name.
+fn in_block(start: usize, own: &[u8], stated: Option<Vec<u8>>) -> Name {
+    match stated {
+        Some(value) if value != own => Name::Own(value),
+        _ => Name::in_block(start, own.len()).unwrap_or_else(|| Name::Own(own.to_vec())),
+    }
+}
+
 /// Why a block is not read as a header.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Flaw {
@@ -121,7 +162,7 @@ pub(crate) enum Flaw {
 }
 
 /// Reads a header block.
-pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
+pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields<'_>, Flaw> {
     // POSIX writes `ustar\0` and the version `00`; GNU writes `ustar ` and
     // ` \0`. A v7 header has neither, those bytes being part of its unused
     // tail, so the magic decides only whether the fields past byte 257 are
@@ -143,7 +184,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
         });
     }
 
-    let mut path = text(&block[NAME]).to_vec();
+    let name = text(&block[NAME]);
     // The POSIX prefix extends the name. GNU uses those bytes for other
     // fields (an incremental dump's access and change times, a multi-volume
     // member's offset), and v7 has no such field. Python joins them to the
@@ -153,9 +194,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     let prefix_slash = magic == Magic::Posix && prefix.ends_with(b"/");
     let star = magic == Magic::Posix && &block[STAR_TRAILER] == b"tar\0";
     let star_prefix = star && prefix.len() > STAR_PREFIX;
-    if magic == Magic::Posix && !prefix.is_empty() {
-        path = [prefix, b"/", &path].concat();
-    }
+    let joined_prefix = if magic == Magic::Posix { prefix } else { &[] };
 
     // A mode and an id are unsigned. The base-256 form is two's complement
     // and can hold a negative value, which a cast would wrap into a
@@ -177,7 +216,7 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
         })
         .map_err(field(HeaderField::Size))?;
     let mtime = number(&block[MTIME]).map_err(field(HeaderField::Mtime))?;
-    let link_target = text(&block[LINKNAME]).to_vec();
+    let link_target = text(&block[LINKNAME]);
     // The device fields are read in every header, whatever its type and its
     // magic: bsdtar, Go and Python refuse a header with magic whose device
     // field does not read, a regular file's included, and Python reads them
@@ -210,11 +249,11 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     // device numbers to report. A header with magic has both.
     let (uname, gname, device) = match magic {
         Magic::Posix | Magic::Gnu => (
-            text(&block[UNAME]).to_vec(),
-            text(&block[GNAME]).to_vec(),
+            text(&block[UNAME]),
+            text(&block[GNAME]),
             Some((major, minor)),
         ),
-        Magic::V7 => (Vec::new(), Vec::new(), None),
+        Magic::V7 => (&[][..], &[][..], None),
     };
 
     // The readers agree on which headers hold owner names and device numbers
@@ -236,7 +275,8 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     let exact_magic = gnu || &block[MAGIC_VERSION] == b"ustar\x0000";
 
     Ok(Fields {
-        path,
+        name,
+        prefix: joined_prefix,
         link_target,
         typeflag: block[TYPEFLAG],
         mode: mode & 0o7777,
