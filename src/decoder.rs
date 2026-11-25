@@ -61,8 +61,13 @@ const RESERVE: u64 = 64 * 1024;
 /// ```
 /// use ferrotape::{Chunk, Decoder, Step};
 ///
-/// /// The regular files of an archive held in memory, as (path, data).
-/// fn files(archive: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ferrotape::Error> {
+/// /// The regular files of an archive held in memory, as (path, data), each
+/// /// at most `limit` bytes: a sparse member's data can be far larger than
+/// /// the archive.
+/// fn files(
+///     archive: &[u8],
+///     limit: u64,
+/// ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn core::error::Error>> {
 ///     let mut decoder = Decoder::new();
 ///     let mut rest = archive;
 ///     let mut files = Vec::new();
@@ -81,6 +86,10 @@ const RESERVE: u64 = 64 * 1024;
 ///                 decoder.skipped(count as u64);
 ///             }
 ///             Step::Entry(entry) if entry.kind() == ferrotape::EntryKind::File => {
+///                 if entry.size() > limit {
+///                     let path = entry.path().escape_ascii();
+///                     return Err(format!("{path} holds {} bytes", entry.size()).into());
+///                 }
 ///                 let mut data = Vec::new();
 ///                 loop {
 ///                     match decoder.data()? {
@@ -93,7 +102,7 @@ const RESERVE: u64 = 64 * 1024;
 ///                             decoder.data_read(count as u64);
 ///                         }
 ///                         Chunk::Zeros(count) => {
-///                             data.resize(data.len() + count as usize, 0);
+///                             data.resize(data.len() + usize::try_from(count)?, 0);
 ///                             decoder.data_read(count);
 ///                         }
 ///                         Chunk::End => break,
@@ -111,8 +120,10 @@ const RESERVE: u64 = 64 * 1024;
 /// # writer.append(&Header::directory("docs/"), std::io::empty())?;
 /// # writer.append(&Header::file("docs/a.txt", 2), &b"hi"[..])?;
 /// # let archive = writer.finish()?;
-/// # assert_eq!(files(&archive)?, [(b"docs/a.txt".to_vec(), b"hi".to_vec())]);
-/// # let refused = files(&archive[..1000]).expect_err("cut inside a's data");
+/// # assert_eq!(files(&archive, 1 << 20)?, [(b"docs/a.txt".to_vec(), b"hi".to_vec())]);
+/// # assert!(files(&archive, 1).is_err());
+/// # let refused = files(&archive[..1000], 1 << 20).expect_err("cut inside a's data");
+/// # let refused = refused.downcast_ref::<ferrotape::Error>().expect("a refusal");
 /// # assert_eq!(refused.offset(), 1000);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```

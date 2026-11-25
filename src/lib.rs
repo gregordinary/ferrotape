@@ -16,16 +16,16 @@
 //! A [`Reader`] reads an archive from any [`Read`](std::io::Read): a file, a
 //! decompressor, another archive's member. [`Reader::next_entry`] yields each
 //! member as an [`Entry`], the long names and pax records that describe it
-//! already applied, and [`Reader::data`] reads its data:
+//! already applied. [`Reader::read_entry`] reads its data whole, up to a
+//! limit, and [`Reader::data`] reads it as a [`Read`](std::io::Read):
 //!
 //! ```no_run
-//! use std::io::Read;
-//!
 //! let file = std::fs::File::open("archive.tar")?;
 //! let mut reader = ferrotape::Reader::new(file);
 //! while let Some(entry) = reader.next_entry()? {
-//!     let mut data = Vec::new();
-//!     reader.data().read_to_end(&mut data)?;
+//!     // A sparse member's data can be far larger than the archive, so
+//!     // what is held is bounded: a member over 16 MiB is refused.
+//!     let data = reader.read_entry(16 << 20)?;
 //!     println!("{}: {} bytes", entry.path().escape_ascii(), data.len());
 //! }
 //! # Ok::<(), Box<dyn std::error::Error>>(())
@@ -239,12 +239,18 @@
 //!     }
 //! }
 //!
-//! /// Reads the current member's data into `out`.
+//! /// Reads the current member's data whole, refusing one larger than
+//! /// `limit`: a sparse member's data can be far larger than the archive.
 //! async fn read_data(
 //!     decoder: &mut Decoder,
 //!     source: &mut impl Source,
-//!     out: &mut Vec<u8>,
-//! ) -> Result<(), Box<dyn Error>> {
+//!     limit: u64,
+//! ) -> Result<Vec<u8>, Box<dyn Error>> {
+//!     let size = decoder.data_remaining();
+//!     if size > limit {
+//!         return Err(format!("a member of {size} bytes, over the limit of {limit}").into());
+//!     }
+//!     let mut out = Vec::new();
 //!     let mut buf = [0; 8192];
 //!     loop {
 //!         match decoder.data()? {
@@ -259,7 +265,7 @@
 //!                 out.resize(out.len() + count, 0);
 //!                 decoder.data_read(count as u64);
 //!             }
-//!             Chunk::End => return Ok(()),
+//!             Chunk::End => return Ok(out),
 //!         }
 //!     }
 //! }
@@ -289,8 +295,7 @@
 //! #     let a = next_entry(&mut decoder, &mut source).await?.expect("a.txt");
 //! #     assert_eq!(a.path(), b"a.txt");
 //! #     let b = next_entry(&mut decoder, &mut source).await?.expect("b.txt");
-//! #     let mut data = Vec::new();
-//! #     read_data(&mut decoder, &mut source, &mut data).await?;
+//! #     let data = read_data(&mut decoder, &mut source, 16 << 20).await?;
 //! #     assert_eq!((b.path(), &data[..]), (&b"b.txt"[..], &b"bye"[..]));
 //! #     assert!(next_entry(&mut decoder, &mut source).await?.is_none());
 //! #     Ok::<(), Box<dyn Error>>(())
