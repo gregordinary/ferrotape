@@ -3,11 +3,13 @@
 //!
 //! A mutant is a case's archive with one to three of its items changed:
 //! a header's numeric fields (its size above all), checksum, magic,
-//! typeflag, names or raw bytes; a pax record's key, value or framing; or
-//! the items themselves, deleted, repeated, swapped, cut short, or joined by
-//! another case's member. A numeric field, the checksum and a record's
-//! framing take blanks and NULs where a lenient reader passes over them. Each mutant is derived from a seed and its index
-//! alone, so a run's mutants are the same however many threads read them.
+//! typeflag, names, prefix (with star's trailer or without) or raw bytes; a
+//! pax record's key, value or framing; or the items themselves, deleted,
+//! repeated, swapped, cut short, or joined by another case's member. A
+//! numeric field, the checksum and a record's framing take blanks and NULs
+//! where a lenient reader passes over them. Each mutant is derived from a
+//! seed and its index alone, so a run's mutants are the same however many
+//! threads read them.
 
 use crate::archive::{Archive, BLOCK, Checksum, Header, Item, Magic, Number, Record, frame};
 
@@ -148,6 +150,14 @@ const RAW_NUMBERS: &[&[u8]] = &[
     b"00000000006 ",
     b" 00000000006",
     b"0000000000+6",
+    b"  \0 0644",
+    b" \0 00000000006",
+    b"  \0x",
+    b"\0x",
+    b"0644 \0x",
+    b"0644 \0 1",
+    b"00644\0x",
+    b"000644\x001",
     b"77777777777\0",
     b"\x80\0\0\0\0\0\0\0\0\0\x04\0",
     b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
@@ -158,11 +168,14 @@ const BLANKS: &[u8] = b" \t\0";
 
 /// `value`'s octal digits, `width` bytes with the NUL that ends them, with
 /// a blank put where a lenient reader might pass over it: before the
-/// digits, between them, after them, or in place of them all.
+/// digits, between them, after them, or in place of them all. Or blanks of
+/// two kinds together: spaces and a NUL before the digits, or a space and a
+/// NUL, or a NUL alone, between the digits and a byte after them.
 fn lenient(rng: &mut Rng, value: u64, width: usize) -> Vec<u8> {
     let mut digits = format!("{value:0w$o}", w = width - 1).into_bytes();
     let blank = *rng.pick(BLANKS);
-    match rng.below(6) {
+    let after = *rng.pick(b"x1 \0");
+    match rng.below(9) {
         // In place of a leading zero, or before the digits.
         0 => digits[0] = blank,
         1 => {
@@ -182,8 +195,28 @@ fn lenient(rng: &mut Rng, value: u64, width: usize) -> Vec<u8> {
         }
         // The field of blanks alone, or blanks then a NUL.
         4 => digits = vec![blank; width - 1],
-        _ => {
+        5 => {
             digits = vec![blank; width];
+            return digits;
+        }
+        // Spaces, a NUL, then the digits, the field keeping its width.
+        6 => {
+            let spaces = 1 + rng.below(3);
+            let mut field = vec![b' '; spaces];
+            field.push(0);
+            field.extend_from_slice(&digits[spaces + 1..]);
+            return field;
+        }
+        // The digits, a space and a NUL, then a byte.
+        7 => {
+            digits.drain(..3);
+            digits.extend_from_slice(&[b' ', 0, after]);
+            return digits;
+        }
+        // The digits and a NUL, then a byte.
+        _ => {
+            digits.drain(..2);
+            digits.extend_from_slice(&[0, after]);
             return digits;
         }
     }
@@ -214,6 +247,23 @@ const CHECKSUMS: &[&[u8]] = &[
     b"####### ",
     b"#######\0",
     b"  ######",
+    b"######\0x",
+    b"######\x000",
+    b"##### \0x",
+    b"  \0#####",
+];
+
+/// What a header ending in star's trailer, `tar` and a NUL, holds in bytes
+/// 476 to 499, where star keeps its access and change times.
+const STAR_TIMES: &[&[u8]] = &[
+    b"00000001750 00000003720 ",
+    b"00000001750\x0000000003720\0",
+    b"",
+    b"            ",
+    b"xxxxxxxxxxx\0",
+    b"00000001750\0xxxxxxxxxxx\0",
+    b"  \0 0001750\0",
+    b"0001750 \0x",
 ];
 
 /// What a mutation did, for a mutant's statement.
@@ -326,6 +376,16 @@ fn mutate_header(rng: &mut Rng, header: &mut Header, body: u64, steps: &mut Step
             let prefix = rng.pick(&[&b""[..], b"p", b"p/", b"/", b"a\0b"]).to_vec();
             steps.push(format!("prefix {}", crate::value::render(&prefix)));
             header.prefix = prefix;
+            // star's trailer, and what star keeps in the prefix's last bytes.
+            if rng.one_in(3) {
+                let times = rng.pick(STAR_TIMES).to_vec();
+                steps.push(format!(
+                    "star's trailer, times {}",
+                    crate::value::quoted(&times)
+                ));
+                header.raw.push((476, times));
+                header.raw.push((508, b"tar\0".to_vec()));
+            }
         }
         10 => {
             let field = rng.below(6);
@@ -646,6 +706,46 @@ mod tests {
         assert!(
             changed > 150,
             "{changed} of 200 mutants changed their archive"
+        );
+    }
+
+    #[test]
+    fn a_lenient_field_takes_each_shape_within_its_width() {
+        // What follows the leading spaces, and what follows the digits.
+        let shape = |field: &[u8]| -> String {
+            field
+                .iter()
+                .map(|byte| match byte {
+                    b'0'..=b'7' => 'd',
+                    b' ' => 's',
+                    0 => 'n',
+                    _ => 'x',
+                })
+                .collect()
+        };
+        let mut seen = [false; 3];
+        for index in 0..2000 {
+            let mut rng = Rng::new(1, index);
+            for width in [8, 12] {
+                let field = lenient(&mut rng, 0o644, width);
+                assert!(field.len() <= width, "{field:?}");
+                let shape = shape(&field);
+                let spaces = shape.trim_start_matches('s');
+                if spaces.len() < shape.len() && spaces.starts_with("nd") {
+                    seen[0] = true;
+                }
+                let tail = shape.trim_start_matches('d');
+                if tail.len() < shape.len() && tail.starts_with("sn") && tail.len() == 3 {
+                    seen[1] = true;
+                }
+                if tail.len() < shape.len() && tail.starts_with('n') && tail.len() == 2 {
+                    seen[2] = true;
+                }
+            }
+        }
+        assert_eq!(
+            seen, [true; 3],
+            "spaces, a NUL and digits; digits, a space, a NUL and a byte; digits, a NUL and a byte"
         );
     }
 }

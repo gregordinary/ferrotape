@@ -7,7 +7,7 @@ use std::io::Read as _;
 use ferrotape::{EntryKind, GlobalHeaders, Reader as TarReader};
 
 use crate::case::{Case, Level, Mode, Reader, Verdict};
-use crate::reading::{Data, Member, Reading};
+use crate::reading::{Data, End, Member, Reading};
 
 /// How far past the end marker `finish` reads.
 const TRAILING_LIMIT: u64 = 1 << 20;
@@ -188,9 +188,10 @@ pub struct Difference {
     /// The reader.
     pub reader: Reader,
     /// What differs: `members` where the member lists do not name the same
-    /// members in the same order, and otherwise the field (`link target`,
-    /// `data`, `kind`, `device`, `mode`, `uid`, `gid`, `uname`, `gname`,
-    /// `mtime`).
+    /// members in the same order, or ferrotape lists members past those a
+    /// reader listed before it failed, and otherwise the field (`link
+    /// target`, `data`, `kind`, `device`, `mode`, `uid`, `gid`, `uname`,
+    /// `gname`, `mtime`).
     pub what: &'static str,
     /// The member, and each side's value, as a message.
     pub detail: String,
@@ -219,10 +220,16 @@ impl fmt::Display for Difference {
 }
 
 /// Every way ferrotape's members differ from what `reader` read. Empty where
-/// they agree, or where the reader refused the archive, since a refusal reads
-/// nothing.
+/// they agree, or where the reader refused the archive before listing a
+/// member, since a refusal reads nothing.
+///
+/// Go or Python failing after listing members is compared by what it
+/// listed: ferrotape must list the same members, and none past them. Where it
+/// lists those members and ends, the failure alone differs, which the
+/// documentation states where it happens.
 pub fn differences(ours: &[Read], reader: Reader, reading: &Reading) -> Vec<Difference> {
-    if reading.refused() {
+    let failed = matches!(reading.end, End::Error(_)) && !members(reading).is_empty();
+    if reading.refused() && !failed {
         return Vec::new();
     }
     let theirs = members(reading);
@@ -237,10 +244,11 @@ pub fn differences(ours: &[Read], reader: Reader, reading: &Reading) -> Vec<Diff
             .any(|(a, b)| !same_path(&a.path, &b.path))
     {
         let mine: Vec<String> = ours.iter().map(|m| crate::value::render(&m.path)).collect();
+        let then = if failed { " and a failure" } else { "" };
         out.push(Difference {
             reader,
             what: "members",
-            detail: format!("{mine:?}, theirs {:?}", paths(&theirs)),
+            detail: format!("{mine:?}, theirs {:?}{then}", paths(&theirs)),
             stated: false,
         });
         return out;
@@ -454,4 +462,50 @@ pub fn undisputed(case: &Case) -> bool {
             .all(|(m, a)| m.typeflag.is_none_or(|t| typeflag_kind(t) == a.kind));
         finished && kinds && differences(&ours, reader, reading).is_empty()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::archive::Archive;
+
+    /// ferrotape's members of an archive of three empty files, at Strict in
+    /// the Refuse mode.
+    fn three() -> Vec<Read> {
+        let lines = ["header name=a", "header name=b", "header name=c", "end"];
+        let (ours, verdict) = read(
+            &Archive::parse(&lines).unwrap().build(),
+            Level::Strict,
+            Mode::Refuse,
+        );
+        assert_eq!(verdict, Verdict::Read);
+        ours
+    }
+
+    fn go(lines: &[&str]) -> Reading {
+        Reading::parse(lines).unwrap()
+    }
+
+    const A: &str = "member type=0 path=a size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=\"\"";
+
+    #[test]
+    fn a_reader_failing_after_members_is_compared_by_what_it_listed() {
+        let ours = three();
+        // Members past those listed before the failure differ.
+        let failed = go(&[A, "error \"archive/tar: invalid tar header\""]);
+        let found = differences(&ours, Reader::Go, &failed);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].what, "members");
+        assert!(
+            found[0].detail.ends_with("and a failure"),
+            "{}",
+            found[0].detail
+        );
+        // The same members, then the failure: the failure alone differs,
+        // which a row of the documentation states where it happens.
+        assert!(differences(&ours[..1], Reader::Go, &failed).is_empty());
+        // A failure before any member is a refusal, which reads nothing.
+        let refused = go(&["error \"archive/tar: invalid tar header\""]);
+        assert!(differences(&ours, Reader::Go, &refused).is_empty());
+    }
 }

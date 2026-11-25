@@ -235,9 +235,12 @@ setting is compared with.
 `mutate` changes the catalog's archives, one to three changes at a time. A
 change is one of these:
 
-- A header's size, other numeric fields, checksum, magic, typeflag, names or
-  raw bytes. A numeric field or the checksum can take a blank or a NUL in
-  its digits, around them, or in their place.
+- A header's size, other numeric fields, checksum, magic, typeflag, names,
+  prefix or raw bytes. A numeric field or the checksum can take a blank or a
+  NUL in its digits, around them, or in their place. It can also take spaces
+  and a NUL before the digits, or a NUL and a byte after them. A prefix
+  can come with star's trailer, and numbers, blanks or letters where star
+  keeps its times.
 - A pax record's key, value or framing. A blank or a NUL can come before the
   record's length, or before, inside or after its keyword. The keyword can
   be empty, or a zero can lead the length.
@@ -247,7 +250,9 @@ change is one of these:
 It reads each mutant with ferrotape in every setting. Where ferrotape reads it
 in any setting, it reads the mutant with the reference readers too. It
 reports each mutant ferrotape reads otherwise than a reader its setting
-stands in for, grouped by the kind of difference.
+stands in for, grouped by the kind of difference. Go or Python failing after
+listing members is compared by what it listed, so ferrotape listing members
+past them is reported.
 
 Mutant `n` of a seed is always the same archive, so `--seed` and `--count`
 make a run reproducible whatever `--jobs` is. `--seconds` bounds a run by
