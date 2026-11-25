@@ -18,8 +18,12 @@ use crate::settings::{GlobalHeaders, Level, Limits};
 /// practice, so this covers them in one allocation.
 const RESERVE: usize = 64 * 1024;
 
-/// The most read at once from a source to pass over bytes of it.
+/// The most read at once from a source to pass over a few bytes of it.
 const SCRATCH: usize = 4096;
+
+/// The most read at once from a source to pass over more than [`SCRATCH`]
+/// bytes of it.
+const LARGE_SCRATCH: usize = 32 * 1024;
 
 /// Passes over bytes of the source by seeking: up to the count asked for,
 /// and no further than the source's end. Returns how many it passed over.
@@ -395,11 +399,31 @@ fn read<R: Read>(inner: &mut R, buf: &mut [u8]) -> io::Result<usize> {
     }
 }
 
-/// Reads past up to `count` bytes of `inner`, at most [`SCRATCH`] at once.
-/// Returns how many it passed over, zero where the source has ended.
+/// Reads past up to `count` bytes of `inner`, at most [`SCRATCH`] at once
+/// where that covers them, and otherwise at most [`LARGE_SCRATCH`]. Returns
+/// how many it passed over, zero where the source has ended.
+///
+/// The scratch space is cleared before each read, so a few bytes are passed
+/// over through a small one, and many through a larger one in fewer reads.
 fn read_past<R: Read>(inner: &mut R, count: u64) -> io::Result<u64> {
-    let mut scratch = [0u8; SCRATCH];
-    let want = usize::try_from(count).map_or(SCRATCH, |count| count.min(SCRATCH));
+    if count <= SCRATCH as u64 {
+        read_past_through::<R, SCRATCH>(inner, count)
+    } else {
+        read_past_many(inner, count)
+    }
+}
+
+/// [`read_past`] through [`LARGE_SCRATCH`], kept out of line so that passing
+/// over a few bytes does not set up the larger space.
+#[inline(never)]
+fn read_past_many<R: Read>(inner: &mut R, count: u64) -> io::Result<u64> {
+    read_past_through::<R, LARGE_SCRATCH>(inner, count)
+}
+
+/// Reads past up to `count` bytes of `inner`, at most `N` at once.
+fn read_past_through<R: Read, const N: usize>(inner: &mut R, count: u64) -> io::Result<u64> {
+    let mut scratch = [0u8; N];
+    let want = usize::try_from(count).map_or(N, |count| count.min(N));
     let buf = scratch.get_mut(..want).unwrap_or_default();
     read(inner, buf).map(|got| got as u64)
 }
