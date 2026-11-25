@@ -1,0 +1,31 @@
+[statement]
+A mode field of digits, a NUL and a letter, in the archive's first
+header. GNU tar, Python and Go read the digits, and bsdtar does not
+recognize the archive. ferrotape refuses it.
+
+[archive]
+header name=odd mode="00644\x00x"
+header name=after
+end
+
+[verdict]
+all: refused HeaderField at 0
+
+[gnu-tar 1.35]
+member listed=- path=odd size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+warning "bsdtar: Error opening archive: Unrecognized archive format"
+exit 1
+
+[python 3.12.3]
+member type=0 path=odd size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=odd size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

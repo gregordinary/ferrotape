@@ -1,0 +1,38 @@
+[statement]
+A size field of a space, a NUL and the octal digits of 512, on the second
+member. GNU tar, bsdtar and Python read a size of zero, and list the setuid
+member after it. Go reads 512 bytes of data, the next header among them,
+and lists no such member. ferrotape refuses the archive.
+
+[archive]
+header name=first
+data "1\n"
+header name=cover size=" \x000000001000"
+header name=hidden-setuid mode=0o4755
+end
+
+[verdict]
+all: refused HeaderField at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=cover size=0 mode=0o644 data=""
+member listed=- path=hidden-setuid size=0 mode=0o4755 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=cover size=0 mode=0o644
+member listed=- path=hidden-setuid size=0 mode=0o4755
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=hidden-setuid size=0 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:04e1f85925412be7
+ok

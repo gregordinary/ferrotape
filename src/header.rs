@@ -46,6 +46,10 @@ const STAR_TRAILER: Range<usize> = 508..512;
 /// The length of star's prefix field. star keeps its access and change times
 /// in the rest of the bytes POSIX gives the prefix.
 const STAR_PREFIX: usize = 131;
+/// star's access time, after its prefix.
+const STAR_ATIME: Range<usize> = 476..488;
+/// star's change time, after its access time.
+const STAR_CTIME: Range<usize> = 488..500;
 
 /// The header layout a block holds, by its six bytes of magic alone. The
 /// version is weighed where it matters (`Fields::exact_magic`).
@@ -145,8 +149,8 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     let prefix = text(&block[PREFIX]);
     let stray_prefix = magic != Magic::Posix && !prefix.is_empty();
     let prefix_slash = magic == Magic::Posix && prefix.ends_with(b"/");
-    let star_prefix =
-        magic == Magic::Posix && &block[STAR_TRAILER] == b"tar\0" && prefix.len() > STAR_PREFIX;
+    let star = magic == Magic::Posix && &block[STAR_TRAILER] == b"tar\0";
+    let star_prefix = star && prefix.len() > STAR_PREFIX;
     if magic == Magic::Posix && !prefix.is_empty() {
         path = [prefix, b"/", &path].concat();
     }
@@ -176,17 +180,30 @@ pub(crate) fn parse(block: &[u8; BLOCK]) -> Result<Fields, Flaw> {
     // magic: bsdtar, Go and Python refuse a header with magic whose device
     // field does not read, a regular file's included, and Python reads them
     // under any magic, ending the archive at one it cannot read. GNU tar reads
-    // a device's alone, so a blank one is read alike, as zero, on any other
-    // member.
+    // a device's alone, so on any other member a blank one is read as zero,
+    // where what follows its leading spaces and NULs reads as a number. Go
+    // fails at the header on any other.
     let device_field = |bytes: &[u8]| {
         if !matches!(block[TYPEFLAG], b'3' | b'4') && blank(bytes) {
-            Ok(0)
+            let start = bytes
+                .iter()
+                .position(|byte| !matches!(byte, b' ' | 0))
+                .unwrap_or(bytes.len());
+            octal(bytes.get(start..).unwrap_or_default()).map(|_| 0)
         } else {
             unsigned(bytes)
         }
     };
     let major = device_field(&block[DEVMAJOR]).map_err(field(HeaderField::DevMajor))?;
     let minor = device_field(&block[DEVMINOR]).map_err(field(HeaderField::DevMinor))?;
+    // Go reads a header ending in star's trailer in star's format, star's
+    // access and change times after its prefix, and fails at it where they do
+    // not read. GNU tar, bsdtar and Python read neither, and nor does
+    // ferrotape.
+    if star {
+        number(&block[STAR_ATIME]).map_err(field(HeaderField::Atime))?;
+        number(&block[STAR_CTIME]).map_err(field(HeaderField::Ctime))?;
+    }
     // Past byte 257, so a v7 header names its owner by id alone and has no
     // device numbers to report. A header with magic has both.
     let (uname, gname, device) = match magic {
@@ -276,7 +293,8 @@ pub(crate) fn text(field: &[u8]) -> &[u8] {
 }
 
 /// A numeric field: octal digits, or GNU's base-256 form where the first
-/// byte has its high bit set. A [`blank`] field does not read.
+/// byte has its high bit set. A [`blank`] field does not read, and an octal
+/// field reads as [`octal`] says.
 pub(crate) fn number(field: &[u8]) -> Result<i64, Numeric> {
     if blank(field) {
         return Err(Numeric::Unreadable);
@@ -287,18 +305,29 @@ pub(crate) fn number(field: &[u8]) -> Result<i64, Numeric> {
     }
 }
 
-/// Whether a numeric field holds no value the readers read alike: spaces
-/// alone, or a NUL followed by anything but NULs.
+/// Whether a numeric field holds no digit, and no value the readers read
+/// alike. That is spaces alone, a NUL followed by anything but NULs, or
+/// spaces and a NUL followed by anything but spaces and NULs.
 ///
 /// GNU tar reports a field of spaces as malformed, and reads it as all bits
 /// set: a mode of `0o7777`, a device number of 4294967295. bsdtar, Go and
 /// Python read zero. Where a NUL comes first, bsdtar and Python read zero,
-/// and GNU tar and Go read the digits after it. A field of NULs alone, and
-/// one of spaces ending in a NUL, are zero to every reader.
+/// and GNU tar and Go read the digits after it.
+///
+/// Where spaces come before the NUL, GNU tar, bsdtar and Python read zero.
+/// Go reads the digits after it, and fails at the header where what follows
+/// is not a number. A field of NULs alone, and one of spaces and NULs alone,
+/// a space first, are zero to every reader.
 fn blank(field: &[u8]) -> bool {
     match field.split_first() {
         Some((0, rest)) => rest.iter().any(|byte| *byte != 0),
-        Some(_) => field.iter().all(|byte| *byte == b' '),
+        Some(_) => match field.iter().position(|byte| *byte != b' ') {
+            None => true,
+            Some(at) => {
+                field.get(at) == Some(&0)
+                    && field.iter().skip(at).any(|byte| !matches!(byte, b' ' | 0))
+            }
+        },
         None => false,
     }
 }
@@ -308,42 +337,35 @@ fn unsigned(field: &[u8]) -> Result<u32, Numeric> {
     u32::try_from(number(field)?).map_err(|_| Numeric::OutOfRange)
 }
 
-/// An octal field: leading spaces, digits, then a space or a NUL ending
-/// them. A field of spaces ending in a NUL, with no digit, is zero, as every
-/// reader reads one. A [`blank`] field is refused before this.
+/// An octal field: leading spaces, digits, then spaces and NULs alone to
+/// the field's end. A field of spaces and NULs alone, with no digit, is
+/// zero, as every reader reads one. A [`blank`] field is refused before
+/// this.
 ///
-/// After a space that ends the digits, the field holds spaces alone up to its
-/// first NUL. GNU tar and bsdtar read digits followed by a space and more as
-/// the first digits. Go cannot read the field, and Python, which cannot
-/// either, ends the archive at its header.
+/// The readers part over what follows the digits wherever it is anything
+/// else. GNU tar and bsdtar read digits followed by a space and more as the
+/// first digits. Go cannot read the field, and Python, which cannot either,
+/// ends the archive at its header. After a space and a NUL, GNU tar, bsdtar
+/// and Python read the digits, and Go fails at the header. After a NUL, GNU
+/// tar, Go and Python read the digits, and bsdtar refuses the archive where
+/// the header is its first. In a checksum, bsdtar passes over the header as
+/// damaged where a byte after the digits is not an octal digit, space or
+/// NUL.
 fn octal(field: &[u8]) -> Result<i64, Numeric> {
     let mut value: i64 = 0;
-    let mut seen_digit = false;
-    let mut bytes = field.iter();
-    for byte in bytes.by_ref() {
-        if let Some(digit) = char::from(*byte).to_digit(8) {
-            value = value
-                .checked_mul(8)
-                .and_then(|value| value.checked_add(i64::from(digit)))
-                .ok_or(Numeric::OutOfRange)?;
-            seen_digit = true;
-            continue;
-        }
-        match byte {
-            b' ' if !seen_digit => {}
-            0 => return Ok(value),
-            b' ' => break,
-            _ => return Err(Numeric::Unreadable),
-        }
+    let mut bytes = field.iter().skip_while(|byte| **byte == b' ').peekable();
+    while let Some(digit) = bytes.peek().and_then(|byte| char::from(**byte).to_digit(8)) {
+        value = value
+            .checked_mul(8)
+            .and_then(|value| value.checked_add(i64::from(digit)))
+            .ok_or(Numeric::OutOfRange)?;
+        bytes.next();
     }
-    for byte in bytes {
-        match byte {
-            b' ' => {}
-            0 => break,
-            _ => return Err(Numeric::Unreadable),
-        }
+    if bytes.all(|byte| matches!(byte, b' ' | 0)) {
+        Ok(value)
+    } else {
+        Err(Numeric::Unreadable)
     }
-    Ok(value)
 }
 
 /// GNU's base-256 form: big-endian two's complement, the high bit of the

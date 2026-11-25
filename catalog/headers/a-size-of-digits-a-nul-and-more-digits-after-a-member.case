@@ -1,7 +1,8 @@
 [statement]
 A size field holding octal digits, a NUL and more digits, after another
-member. Every reader reads the digits before the NUL, as ferrotape does: a
-NUL ends a numeric field whatever follows it.
+member. Every reader reads the digits before the NUL. ferrotape refuses the
+archive: after its digits a numeric field holds spaces and NULs alone, and
+in the archive's first header bsdtar does not recognize the archive.
 
 [archive]
 header name=lead
@@ -13,7 +14,7 @@ data "tail\n"
 end
 
 [verdict]
-all: read
+all: refused HeaderField at 1024
 
 [gnu-tar 1.35]
 member listed=- path=lead size=5 mode=0o644 data="lead\n"

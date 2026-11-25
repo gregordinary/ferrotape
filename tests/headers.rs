@@ -26,11 +26,12 @@ fn octal_fields_read_as_writers_pad_them() {
         (&b"0000755\0"[..], 0o755),
         (b"   755 \0", 0o755),
         (b"0000755 ", 0o755),
-        // A field of NULs alone, or of spaces ending in a NUL, is zero to
-        // every reader.
+        (b"644 \0\0 \0", 0o644),
+        // A field of NULs alone, or of spaces and NULs alone with a space
+        // first, is zero to every reader.
         (b"\0\0\0\0\0\0\0\0", 0),
         (b"       \0", 0),
-        (b"  \0 0644", 0),
+        (b"  \0  \0  ", 0),
     ] {
         let entry = read(&with_field(100..108, spelled)).unwrap();
         assert_eq!(entry.mode(), mode, "{spelled:?}");
@@ -41,7 +42,9 @@ fn octal_fields_read_as_writers_pad_them() {
 fn a_blank_field_is_refused() {
     // GNU tar reads a field of spaces as all bits set and reports it, where
     // the others read zero. After a leading NUL, GNU tar and Go read the
-    // digits that follow, and bsdtar and Python read zero.
+    // digits that follow, and bsdtar and Python read zero. After spaces and
+    // a NUL, Go reads the digits that follow, or fails at the header, and the
+    // others read zero.
     let fields = [
         (100..108, HeaderField::Mode),
         (108..116, HeaderField::Uid),
@@ -58,11 +61,21 @@ fn a_blank_field_is_refused() {
         nul_then_spaces[0] = 0;
         let mut nul_then_one = vec![0; width];
         nul_then_one[width - 1] = b'1';
+        let mut spaces_nul_digits = vec![b'0'; width];
+        spaces_nul_digits[..3].copy_from_slice(b"  \0");
+        let mut spaces_nul_letter = vec![b' '; width];
+        spaces_nul_letter[1..3].copy_from_slice(b"\0x");
+        let mut spaces_nul_zero = vec![0; width];
+        spaces_nul_zero[..2].copy_from_slice(b" \0");
+        spaces_nul_zero[width - 1] = b'0';
         for spelled in [
             &mut spaces,
             &mut nul_then_digits,
             &mut nul_then_spaces,
             &mut nul_then_one,
+            &mut spaces_nul_digits,
+            &mut spaces_nul_letter,
+            &mut spaces_nul_zero,
         ] {
             let err = read(&with_field(range.clone(), spelled)).unwrap_err();
             assert_eq!(
@@ -80,12 +93,14 @@ fn a_blank_field_is_refused() {
 #[test]
 fn a_blank_device_number_is_refused_on_a_device_alone() {
     // GNU tar reads the device fields of a device alone: on any other member
-    // every reader reads a blank one as zero.
+    // a blank one is read as zero where what follows its leading spaces and
+    // NULs reads as a number, as every reader but Go reads it. Go reads that
+    // number, which names no device on such a member.
     for (range, field) in [
         (329..337, HeaderField::DevMajor),
         (337..345, HeaderField::DevMinor),
     ] {
-        for spelled in [&b"        "[..], b"\x000000005"] {
+        for spelled in [&b"        "[..], b"\x000000005", b"  \0 0005", b"\0 0005  "] {
             for typeflag in *b"34" {
                 let mut block = Header::new("dev", typeflag, 0).block();
                 block[range.clone()].copy_from_slice(spelled);
@@ -107,6 +122,30 @@ fn a_blank_device_number_is_refused_on_a_device_alone() {
                 seal(&mut block);
                 let entry = read(&block).unwrap();
                 assert_eq!(entry.device(), None, "{spelled:?}");
+            }
+        }
+        // Go fails at the header where what follows does not read, on any
+        // member.
+        for spelled in [
+            &b"\0x      "[..],
+            b"  \0x    ",
+            b"\x0010 1   ",
+            b"0010 \0x ",
+        ] {
+            for typeflag in *b"0345" {
+                let mut block = Header::new("member", typeflag, 0).block();
+                block[range.clone()].copy_from_slice(spelled);
+                seal(&mut block);
+                let err = read(&block).unwrap_err();
+                assert_eq!(
+                    err.kind(),
+                    &ErrorKind::HeaderField {
+                        field,
+                        problem: Numeric::Unreadable,
+                    },
+                    "{spelled:?} {}",
+                    char::from(typeflag),
+                );
             }
         }
     }
@@ -139,22 +178,28 @@ fn a_checksum_in_base256_is_refused() {
     );
 }
 
+/// A regular file's header holding `prefix` from byte 345, with star's
+/// trailer where `trailer` says.
+fn star_header(prefix: &[u8], trailer: bool) -> [u8; BLOCK] {
+    let mut block = Header::new("f", b'0', 0).block();
+    block[345..345 + prefix.len()].copy_from_slice(prefix);
+    if trailer {
+        block[508..512].copy_from_slice(b"tar\0");
+    }
+    seal(&mut block);
+    block
+}
+
 #[test]
 fn a_prefix_longer_than_stars_under_its_trailer_is_refused() {
     // Go reads a POSIX header ending in `tar\0` as star's, its prefix the
     // first 131 bytes; GNU tar, bsdtar and Python join the whole prefix.
-    let header = |prefix: &[u8], trailer: bool| {
-        let mut block = Header::new("f", b'0', 0).block();
-        block[345..345 + prefix.len()].copy_from_slice(prefix);
-        if trailer {
-            block[508..512].copy_from_slice(b"tar\0");
-        }
-        seal(&mut block);
-        block
-    };
-    let long = [b'p'; 140];
+    // star's times after a prefix of 131 bytes run the prefix on for the
+    // readers that do not read star's format.
+    let mut times = [b'p'; 155];
+    times[131..143].copy_from_slice(b"00000000001\0");
     for level in [Level::Strict, Level::Compatible] {
-        let err = Reader::new(&Tar::new().block(&header(&long, true)).finish()[..])
+        let err = Reader::new(&Tar::new().block(&star_header(&times[..143], true)).finish()[..])
             .with_level(level)
             .next_entry()
             .unwrap_err();
@@ -164,23 +209,90 @@ fn a_prefix_longer_than_stars_under_its_trailer_is_refused() {
             "{level:?}"
         );
     }
-    // star's times after a prefix of 131 bytes run the prefix on for the
-    // readers that do not read star's format.
-    let mut times = [b'p'; 155];
-    times[131..143].copy_from_slice(b"00000000001\0");
-    let err = first(&Tar::new().block(&header(&times[..143], true)).finish()).unwrap_err();
-    assert_eq!(err.kind(), &ErrorKind::StarPrefix);
     // A prefix star's field holds, or a long one without the trailer, is read.
-    let entry = first(&Tar::new().block(&header(&long[..131], true)).finish()).unwrap();
+    let long = [b'p'; 140];
+    let entry = first(&Tar::new().block(&star_header(&long[..131], true)).finish()).unwrap();
     assert_eq!(entry.path().len(), 133);
-    let entry = first(&Tar::new().block(&header(&long, false)).finish()).unwrap();
+    let entry = first(&Tar::new().block(&star_header(&long, false)).finish()).unwrap();
     assert_eq!(entry.path().len(), 142);
     // A pax `path` replaces the prefix for every reader.
     let archive = Tar::new()
         .pax(b'x', &pax_record(b"path", b"named"))
-        .block(&header(&long, true))
+        .block(&star_header(&times[..143], true))
         .finish();
     assert_eq!(first(&archive).unwrap().path(), b"named");
+}
+
+#[test]
+fn stars_times_under_its_trailer_must_read() {
+    // Go reads bytes 476 to 499 of a POSIX header ending in star's trailer
+    // as star's access and change times, and fails at the header where they
+    // do not read. GNU tar, bsdtar and Python ignore them.
+    let with_times = |times: &[u8; 24]| {
+        let mut prefix = [0; 155];
+        prefix[..3].copy_from_slice(b"dir");
+        prefix[131..].copy_from_slice(times);
+        Tar::new().block(&star_header(&prefix, true)).finish()
+    };
+    for (times, field) in [
+        (&b"xxxxxxxxxxx\x0000000000000\0"[..], HeaderField::Atime),
+        (b"00000001750\0xxxxxxxxxxx\0", HeaderField::Ctime),
+        (b"000001750 \0x", HeaderField::Atime),
+        (b"  \0 0001750\x0000000003720\0", HeaderField::Atime),
+    ]
+    .map(|(times, field)| {
+        let mut padded = [0; 24];
+        padded[..times.len()].copy_from_slice(times);
+        (padded, field)
+    }) {
+        for level in [Level::Strict, Level::Compatible] {
+            let err = Reader::new(&with_times(&times)[..])
+                .with_level(level)
+                .next_entry()
+                .unwrap_err();
+            assert_eq!(
+                (err.kind(), err.offset()),
+                (
+                    &ErrorKind::HeaderField {
+                        field,
+                        problem: Numeric::Unreadable,
+                    },
+                    0
+                ),
+                "{times:?} {level:?}",
+            );
+        }
+    }
+    // A prefix that runs on past star's 131 bytes, as letters, is a time Go
+    // cannot read, even where a pax `path` names the member.
+    let archive = Tar::new()
+        .pax(b'x', &pax_record(b"path", b"named"))
+        .block(&star_header(&[b'p'; 140], true))
+        .finish();
+    let err = first(&archive).unwrap_err();
+    assert_eq!(
+        err.kind(),
+        &ErrorKind::HeaderField {
+            field: HeaderField::Atime,
+            problem: Numeric::Unreadable,
+        },
+    );
+    // Times as star writes them, NULs, and the same bytes without the
+    // trailer are read, and report no time.
+    for times in [
+        b"00000001750 15301417061 ",
+        b"00000001750\x0000000003720\0",
+        &[0; 24],
+    ] {
+        let entry = first(&with_times(times)).unwrap();
+        assert_eq!(entry.path(), b"dir/f");
+        assert_eq!((entry.atime(), entry.ctime()), (None, None));
+    }
+    let mut prefix = [0; 155];
+    prefix[..3].copy_from_slice(b"dir");
+    prefix[131..142].copy_from_slice(b"xxxxxxxxxxx");
+    let entry = first(&Tar::new().block(&star_header(&prefix, false)).finish()).unwrap();
+    assert_eq!(entry.path(), b"dir/f");
 }
 
 #[test]
@@ -199,11 +311,22 @@ fn a_field_that_is_not_octal_is_refused() {
 }
 
 #[test]
-fn digits_followed_by_a_space_and_more_are_refused() {
-    // GNU tar and bsdtar read the first digits; Go cannot read the field, and
-    // Python ends the archive at its header. After the space that ends the
-    // digits, only spaces may come before the field's first NUL.
-    for spelled in [&b"00644 11"[..], b"644 1\0\0\0", b"00644  x", b" 644 7 \0"] {
+fn digits_followed_by_anything_but_spaces_and_nuls_are_refused() {
+    // Digits, a space and more: GNU tar and bsdtar read the first digits, Go
+    // cannot read the field, and Python ends the archive at its header.
+    // Digits, a space, a NUL and more: Go fails at the header. Digits, a NUL
+    // and more: bsdtar refuses the archive where the header is its first.
+    for spelled in [
+        &b"00644 11"[..],
+        b"644 1\0\0\0",
+        b"00644  x",
+        b" 644 7 \0",
+        b"0644 \0 1",
+        b"0644  \x001",
+        b"644  \0x1",
+        b"00644\0 x",
+        b"000644\x001",
+    ] {
         let err = read(&with_field(100..108, spelled)).unwrap_err();
         assert_eq!(
             err.kind(),
@@ -222,11 +345,53 @@ fn digits_followed_by_a_space_and_more_are_refused() {
             problem: Numeric::Unreadable,
         },
     );
-    // Spaces up to the end or to a NUL, and anything after a NUL, which every
-    // reader cuts the field at.
-    for spelled in [&b"644     "[..], b"644  \0x1", b"000644\x001"] {
+    // Spaces and NULs alone after the digits.
+    for spelled in [&b"644     "[..], b"644  \0\0 ", b"000644\0 ", b"0644 \0  "] {
         let entry = read(&with_field(100..108, spelled)).unwrap();
         assert_eq!(entry.mode(), 0o644, "{spelled:?}");
+    }
+}
+
+#[test]
+fn a_checksum_with_more_than_spaces_and_nuls_after_its_digits_is_refused() {
+    // bsdtar passes over a header as damaged where a byte of its checksum
+    // after the digits is not an octal digit, a space or a NUL, and reads the
+    // next block as a header; the others read the digits. After a space and a
+    // NUL, Go fails at the header.
+    let spelled = |spelling: &[u8; 8]| {
+        let mut block = Header::new("odd", b'0', 0).block();
+        block[148..156].fill(b' ');
+        let sum: u32 = block.iter().map(|byte| u32::from(*byte)).sum();
+        let digits = spelling.iter().filter(|byte| **byte == b'#').count();
+        let mut sum = format!("{sum:0digits$o}").into_bytes().into_iter();
+        for (at, byte) in spelling.iter().enumerate() {
+            block[148 + at] = if *byte == b'#' {
+                sum.next().unwrap()
+            } else {
+                *byte
+            };
+        }
+        let archive = Tar::new()
+            .file("first", b"1\n")
+            .block(&block)
+            .file("after", b"")
+            .finish();
+        paths_at(&archive, Level::Strict)
+    };
+    for spelling in [b"######\0x", b"##### \0x", b"######\0\x01", b"######\x000"] {
+        let err = spelled(spelling).unwrap_err();
+        assert_eq!(
+            (err.kind(), err.offset()),
+            (&ErrorKind::Checksum, BLOCK as u64 * 2),
+            "{spelling:?}"
+        );
+    }
+    for spelling in [b"######\0 ", b"###### \0", b"#####\0 \0", b"######  "] {
+        assert_eq!(
+            spelled(spelling).unwrap(),
+            [&b"first"[..], b"odd", b"after"],
+            "{spelling:?}"
+        );
     }
 }
 

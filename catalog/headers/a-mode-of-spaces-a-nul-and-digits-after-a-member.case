@@ -1,0 +1,33 @@
+[statement]
+A mode field of two spaces, a NUL, a space and the digits 0644, after
+another member. GNU tar, bsdtar and Python read mode 0, and Go reads
+0644. ferrotape refuses the archive.
+
+[archive]
+header name=first
+data "1\n"
+header name=cover mode="  \x00 0644"
+end
+
+[verdict]
+all: refused HeaderField at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=cover size=0 mode=0o0 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=cover size=0 mode=0o0
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=0 mode=0o0 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

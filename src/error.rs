@@ -995,6 +995,14 @@ pub enum HeaderField {
     DevMajor,
     /// A device's minor number.
     DevMinor,
+    /// star's access time, in bytes 476 to 487 of a POSIX header ending in
+    /// star's trailer, `tar` and a NUL. Go reads the header in star's format
+    /// and fails at it where the time does not read. GNU tar, bsdtar and
+    /// Python ignore it, and ferrotape reports no time from it.
+    Atime,
+    /// star's change time, in bytes 488 to 499 of a POSIX header ending in
+    /// star's trailer, as [`Atime`](Self::Atime).
+    Ctime,
 }
 
 impl fmt::Display for HeaderField {
@@ -1007,6 +1015,8 @@ impl fmt::Display for HeaderField {
             HeaderField::Mtime => "mtime",
             HeaderField::DevMajor => "devmajor",
             HeaderField::DevMinor => "devminor",
+            HeaderField::Atime => "atime",
+            HeaderField::Ctime => "ctime",
         })
     }
 }
@@ -1016,22 +1026,32 @@ impl fmt::Display for HeaderField {
 #[non_exhaustive]
 pub enum Numeric {
     /// It is not a number in the field's form: octal digits or base-256 in a
-    /// header field, decimal digits in a pax record. Octal digits are ended
-    /// by a space or a NUL, and after a space the field holds only spaces up
-    /// to its first NUL. GNU tar reads digits followed by a space and more as
-    /// the first digits. bsdtar does too, where the header is not the
-    /// archive's first. Go and Python cannot read them, and Python ends the
-    /// archive at that header.
+    /// header field, decimal digits in a pax record. A header field's octal
+    /// digits may follow spaces, and spaces and NULs alone may follow them,
+    /// as POSIX writes them.
     ///
-    /// A header field of spaces alone does not read either, nor does one
-    /// that begins with a NUL and holds anything but NULs after it. GNU tar
-    /// reports a field of spaces as malformed and reads it as all bits set,
-    /// a mode of `0o7777`, where the others read zero. After a leading NUL,
-    /// GNU tar and Go read the digits that follow, and bsdtar and Python
-    /// read zero. A field of NULs alone, or of spaces ending in a NUL, is
-    /// zero to every reader. A device's numbers are held to this, and
-    /// another member's are read as zero, since GNU tar reads them only for
-    /// a device.
+    /// Wherever anything else follows the digits, the readers part. GNU tar
+    /// reads digits followed by a space and more as the first digits. bsdtar
+    /// does too, where the header is not the archive's first. Go and Python
+    /// cannot read them, and Python ends the archive at that header. After a
+    /// space and a NUL, GNU tar, bsdtar and Python read the digits, and Go
+    /// fails at the header.
+    ///
+    /// After a NUL, bsdtar refuses the archive where the header is its first.
+    /// In a checksum, bsdtar passes over the header as damaged where a byte
+    /// after the digits is not an octal digit, space or NUL.
+    ///
+    /// A header field with no digit reads only as NULs alone, or as spaces
+    /// and NULs alone with a space first. Every reader reads those as zero.
+    /// GNU tar reports a field of spaces alone as malformed, and reads it as
+    /// all bits set: a mode of `0o7777`. The others read zero.
+    ///
+    /// After a leading NUL, GNU tar and Go read the digits that follow, and
+    /// bsdtar and Python read zero. After spaces and a NUL, GNU tar, bsdtar
+    /// and Python read zero, and Go reads the digits that follow. A device's
+    /// numbers are held to this. Another member's are read as zero where what
+    /// follows their leading spaces and NULs reads, since GNU tar reads them
+    /// only for a device.
     Unreadable,
     /// It reads as a value the field cannot hold: a negative mode, id or size,
     /// or one too large for the field's type. A size of 2^60 or more is out

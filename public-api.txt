@@ -164,6 +164,8 @@ impl core::marker::UnsafeUnpin for ferrotape::HeaderError
 impl core::panic::unwind_safe::RefUnwindSafe for ferrotape::HeaderError
 impl core::panic::unwind_safe::UnwindSafe for ferrotape::HeaderError
 #[non_exhaustive] pub enum ferrotape::HeaderField
+pub ferrotape::HeaderField::Atime
+pub ferrotape::HeaderField::Ctime
 pub ferrotape::HeaderField::DevMajor
 pub ferrotape::HeaderField::DevMinor
 pub ferrotape::HeaderField::Gid

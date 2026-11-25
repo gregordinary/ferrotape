@@ -1,0 +1,40 @@
+[statement]
+A regular file's device major field of two spaces, a NUL, a space and
+digits, after another member. GNU tar does not read a regular file's
+device fields, bsdtar and Python read zero, and Go reads the digits,
+which name no device on a regular file. ferrotape reads the member, as
+every reader does.
+
+[archive]
+header name=first
+data "1\n"
+header name=odd devmajor="  \x00 0010"
+header name=after
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=odd size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=odd size=0 mode=0o644
+member listed=- path=after size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=odd size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=odd size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

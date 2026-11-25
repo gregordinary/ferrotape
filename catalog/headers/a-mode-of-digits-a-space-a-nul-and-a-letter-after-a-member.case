@@ -1,0 +1,36 @@
+[statement]
+A mode field of digits, a space, a NUL and a letter, after another
+member. GNU tar, bsdtar and Python read the digits, and Go fails at the
+header. ferrotape refuses the archive.
+
+[archive]
+header name=first
+data "1\n"
+header name=cover mode="00644 \x00x"
+header name=after
+end
+
+[verdict]
+all: refused HeaderField at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=cover size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=cover size=0 mode=0o644
+member listed=- path=after size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=cover size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+error "archive/tar: invalid tar header"

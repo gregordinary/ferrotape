@@ -114,14 +114,21 @@ The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
 Each refusal has an `ErrorKind`. A stream that is no archive at all is
 `ErrorKind::NotATar`, told apart from a damaged one. The reader refuses:
 
-- A header that fails its checksum. The checksum is octal: GNU tar and bsdtar
-  pass over a header whose sum is in base-256, which Python reads.
+- A header that fails its checksum. The checksum is octal, read as any
+  numeric field is. GNU tar and bsdtar pass over a header whose sum is in
+  base-256, which Python reads. bsdtar also passes over one with a byte
+  after the digits that is not an octal digit, a space or a NUL.
 - A numeric field that does not read, or reads negative where it cannot be,
-  the device numbers of every header included, whatever its magic. A field
-  holding digits, then a space and more digits, does not read. Nor does a
-  field of spaces alone, or one beginning with a NUL and holding anything
-  else. GNU tar reads those otherwise than the others. GNU tar reads
-  device numbers only for a device, so only a device's are held to this.
+  the device numbers of every header included, whatever its magic. Octal
+  digits may follow spaces, and spaces and NULs alone may follow them.
+  Anything else after the digits does not read, a NUL then a digit
+  included. A field with no digit reads only as NULs alone, or spaces and
+  NULs alone with a space first.
+
+  The readers read the rest apart: after spaces and a NUL, Go reads the
+  digits that follow, where the others read zero. GNU tar reads device
+  numbers only for a device. So another member's blank ones are read as
+  zero, where what follows their spaces and NULs reads.
 - A declared size of 2^60 or more, in a header or a pax record.
 - A pax record that does not frame, a keyword that is empty, holds a NUL, or
   begins with a space or a tab included. GNU tar passes over the space or
@@ -158,6 +165,10 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 - A POSIX header that names its member with a prefix ending in `/`.
 - A POSIX header ending in star's trailer that names its member with a
   prefix longer than star's 131 bytes.
+- A POSIX header ending in star's trailer whose bytes where star keeps its
+  access and change times do not read as numbers (`HeaderField::Atime`,
+  `HeaderField::Ctime`). Go reads such a header in star's format, and fails
+  at it.
 - A member with an empty name.
 - A member named as a directory that declares data, or that has a pax record
   other than those the reader applies, `comment` and `hdrcharset`.
@@ -190,15 +201,15 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
 
 ### Agreement with the reference readers
 
-- The case catalog's 264 archives. In each of the six settings, ferrotape
+- The case catalog's 281 archives. In each of the six settings, ferrotape
   gives every case its stated verdict. Wherever it reads one, it reads the
   members the readers that setting stands in for read.
-- 10,000 archives made by changing the catalog's one to three ways (9,128
-  distinct, 2,308 of them read by ferrotape in some setting). None is read
+- 10,000 archives made by changing the catalog's one to three ways (9,130
+  distinct, 2,254 of them read by ferrotape in some setting). None is read
   otherwise than by the readers its setting stands in for.
-- 4,360 tar streams in 3,994 published archives (Alpine, Debian and Gentoo
+- 4,359 tar streams in 3,993 published archives (Alpine, Debian and Gentoo
   packages and root filesystems, crates, npm packages, Python sdists,
-  Homebrew bottles, container image layers, and release tarballs), 764,470
+  Homebrew bottles, container image layers, and release tarballs), 764,311
   members: every stream read at both levels and in every global-header mode,
   none refused.
 - 618 members written by `Writer`, at each field's limits and generated: GNU
