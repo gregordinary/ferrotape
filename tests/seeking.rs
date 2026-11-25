@@ -72,10 +72,10 @@ fn a_seeking_reader_reads_what_a_reading_reader_reads() {
 fn a_seeking_reader_passes_over_by_seeking() {
     let archive = archive();
     let records = pax_record(b"path", b"renamed").len() as u64;
-    // Five headers, the extended header's records and the end marker are
-    // read; seeking passes over the members' data, which was not wanted, and
-    // all padding.
-    let headers = 5 * BLOCK as u64 + records + 2 * BLOCK as u64;
+    // Five headers, the extended header's records, the first byte of the
+    // padding after them, and the end marker are read; seeking passes over
+    // the members' data, which was not wanted, and the rest of the padding.
+    let headers = 5 * BLOCK as u64 + records + 1 + 2 * BLOCK as u64;
     for (seeking, expected) in [(true, headers), (false, archive.len() as u64)] {
         let read = Rc::new(Cell::new(0));
         let source = Counting {

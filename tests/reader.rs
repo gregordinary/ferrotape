@@ -8,7 +8,9 @@ use std::io::{self, Read};
 use ferrotape::{
     EntryKind, Error, ErrorKind, Keyword, Level, Limits, Metadata, Reader, Truncation,
 };
-use support::{BLOCK, Header, Magic, Tar, first, first_at, paths, pax_record, read_whole};
+use support::{
+    BLOCK, Header, Magic, Tar, first, first_at, paths, paths_at, pax_record, read_whole,
+};
 
 const END: [u8; 2 * BLOCK] = [0; 2 * BLOCK];
 
@@ -753,7 +755,7 @@ fn a_long_name_or_long_link_read_past_its_size_is_refused() {
                 let err = first_at(&archive, level).unwrap_err();
                 assert_eq!(
                     (err.kind(), err.offset()),
-                    (&ErrorKind::LongNameOverrun(kind), 0)
+                    (&ErrorKind::MetadataOverrun(kind), 0)
                 );
             }
         }
@@ -810,9 +812,49 @@ fn a_long_name_or_long_link_read_past_its_size_is_refused() {
         .finish();
     assert_eq!(
         first(&archive).unwrap_err().to_string(),
-        "a GNU long name holds no NUL, and readers read on into the padding after it \
-         differently at offset 0",
+        "a GNU long name's padding begins with a byte that is not NUL, which readers \
+         read on into differently at offset 0",
     );
+}
+
+#[test]
+fn a_pax_or_global_header_whose_padding_begins_with_other_than_nul_is_refused() {
+    // Python reads records on past the size, into the padding, as far as its
+    // first NUL; GNU tar, bsdtar and Go read as far as the size. Here the
+    // padding holds a `path` record, which renames the member for Python.
+    let covered = pax_record(b"comment", b"c");
+    let padding = pax_record(b"path", b"evil");
+    for (typeflag, kind) in [(b'x', Metadata::PaxHeader), (b'g', Metadata::GlobalHeader)] {
+        let header = Header::new("PaxHeader", typeflag, covered.len() as u64);
+        let archive = |after: &[u8]| {
+            let mut data = covered.clone();
+            data.extend_from_slice(after);
+            data.resize(BLOCK, 0);
+            Tar::new()
+                .file("first", b"")
+                .header(&header)
+                .raw(&data)
+                .file("named", b"")
+                .finish()
+        };
+        for after in [&padding[..], b"x", b"\n"] {
+            for level in [Level::Strict, Level::Compatible] {
+                let err = paths_at(&archive(after), level).unwrap_err();
+                assert_eq!(
+                    (err.kind(), err.offset()),
+                    (&ErrorKind::MetadataOverrun(kind), BLOCK as u64),
+                    "{after:?} {level:?}"
+                );
+            }
+        }
+        // A NUL first: every reader stops there.
+        let mut nul = vec![0];
+        nul.extend_from_slice(&padding);
+        assert_eq!(
+            paths_at(&archive(&nul), Level::Strict).unwrap(),
+            [&b"first"[..], b"named"]
+        );
+    }
 }
 
 #[test]

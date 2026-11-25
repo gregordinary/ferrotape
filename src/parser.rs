@@ -69,8 +69,8 @@ pub(crate) struct Request {
     kind: Metadata,
     /// The length of its data, within the metadata limit.
     size: u64,
-    /// Whether the first byte of the padding after the data is read with it:
-    /// for a GNU long name or long link, where padding follows.
+    /// Whether the first byte of the padding after the data is read with it,
+    /// where padding follows.
     peek: bool,
 }
 
@@ -233,7 +233,7 @@ impl Parser {
                 // bsdtar and Go read as far as its size.
                 let next = if request.peek { data.pop() } else { None };
                 if !data.contains(&0) && next.is_some_and(|byte| byte != 0) {
-                    return Err(refuse(ErrorKind::LongNameOverrun(request.kind)));
+                    return Err(refuse(ErrorKind::MetadataOverrun(request.kind)));
                 }
                 let name = long_name(&data, self.level)
                     .ok_or_else(|| refuse(ErrorKind::LongNameNul(request.kind)))?;
@@ -250,17 +250,24 @@ impl Parser {
                     self.pending.long_link = Some(name);
                 }
             }
-            Metadata::PaxHeader => {
-                self.pending.pax = Some(pax::parse(data, self.level).map_err(refuse)?);
-            }
-            Metadata::GlobalHeader => {
-                let (records, applied) =
-                    pax::parse_global(data, self.globals, self.level).map_err(refuse)?;
-                if applied.sets_a_field() {
-                    self.global_fields = applied;
-                    self.global_applied = true;
+            Metadata::PaxHeader | Metadata::GlobalHeader => {
+                // Python reads records on past the size, into the padding,
+                // as far as its first NUL; the others read as far as the size.
+                let next = if request.peek { data.pop() } else { None };
+                if next.is_some_and(|byte| byte != 0) {
+                    return Err(refuse(ErrorKind::MetadataOverrun(request.kind)));
                 }
-                self.pending.global = Some(records);
+                if request.kind == Metadata::PaxHeader {
+                    self.pending.pax = Some(pax::parse(data, self.level).map_err(refuse)?);
+                } else {
+                    let (records, applied) =
+                        pax::parse_global(data, self.globals, self.level).map_err(refuse)?;
+                    if applied.sets_a_field() {
+                        self.global_fields = applied;
+                        self.global_applied = true;
+                    }
+                    self.pending.global = Some(records);
+                }
             }
         }
         Ok(Step::Block)
@@ -364,7 +371,7 @@ impl Parser {
         if extended && size == 0 {
             return refuse(ErrorKind::EmptyMetadata(kind));
         }
-        let peek = !extended && !size.is_multiple_of(BLOCK as u64);
+        let peek = !size.is_multiple_of(BLOCK as u64);
         Ok(Step::Metadata(Request {
             at,
             kind,

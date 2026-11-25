@@ -11,7 +11,7 @@ header name=lnk typeflag=2 linkname=hdrlink
 end
 
 [verdict]
-all: refused LongNameOverrun at 0
+all: refused MetadataOverrun at 0
 
 [gnu-tar 1.35]
 member listed=l path=lnk link=tgt size=0 mode=0o644

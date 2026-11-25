@@ -1,0 +1,44 @@
+[statement]
+A pax header whose size covers a `comment` record, a `size` record of 0
+in the padding after it, before a member whose 512 bytes of data hold a
+setuid member's header. Python applies the size and lists the hidden
+member, which the other readers read as data. ferrotape refuses the
+archive.
+
+[archive]
+header name=first
+data "1\n"
+header name=PaxHeader typeflag=x size=13
+data "13 comment=c\n9 size=0\n"
+header name=f size=512
+header name=hidden mode=0o4755
+header name=after
+end
+
+[verdict]
+all: refused MetadataOverrun at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=f size=512 mode=0o644 data=512:22424b0b947887c6
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=f size=512 mode=0o644
+member listed=- path=after size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=hidden size=0 mode=0o4755 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=f size=512 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=512:22424b0b947887c6
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

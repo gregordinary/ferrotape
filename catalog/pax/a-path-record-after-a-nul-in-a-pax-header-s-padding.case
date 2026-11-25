@@ -1,0 +1,40 @@
+[statement]
+A pax header whose size covers a `path` record, then a NUL and a second
+`path` record in the padding. Every reader stops at the NUL, and reads
+the member as `ab`, as ferrotape does.
+
+[archive]
+header name=first
+data "1\n"
+header name=PaxHeader typeflag=x size=11
+data "11 path=ab\n\x0015 path=evil/f\n"
+header name=f
+header name=after
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=ab size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=ab size=0 mode=0o644
+member listed=- path=after size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=ab size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=ab size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok

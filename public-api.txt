@@ -62,10 +62,10 @@ pub ferrotape::ErrorKind::Io
 pub ferrotape::ErrorKind::LongNameConflict
 pub ferrotape::ErrorKind::LongNameConflict::keyword: ferrotape::Keyword
 pub ferrotape::ErrorKind::LongNameNul(ferrotape::Metadata)
-pub ferrotape::ErrorKind::LongNameOverrun(ferrotape::Metadata)
 pub ferrotape::ErrorKind::MetadataLimit
 pub ferrotape::ErrorKind::MetadataLimit::limit: u64
 pub ferrotape::ErrorKind::MetadataLimit::size: u64
+pub ferrotape::ErrorKind::MetadataOverrun(ferrotape::Metadata)
 pub ferrotape::ErrorKind::MetadataWithoutMagic(ferrotape::Metadata)
 pub ferrotape::ErrorKind::NotAHeader
 pub ferrotape::ErrorKind::NotATar

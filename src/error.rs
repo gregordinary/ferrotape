@@ -274,15 +274,22 @@ pub enum ErrorKind {
     /// differently. At [`Level::Compatible`](crate::Level::Compatible)
     /// the name ends at its first NUL.
     LongNameNul(Metadata),
-    /// A GNU long name or long link holds no NUL, and the padding after its
-    /// data begins with a byte that is not one.
+    /// The padding after a metadata member's data begins with a byte that is
+    /// not NUL, and some reader reads the data on into it.
     ///
-    /// GNU tar and Python read the name on past its size, into the padding,
-    /// as far as the first NUL. bsdtar and Go read as far as its size, and so
-    /// name the member, or its link target, differently. Where the data
-    /// holds a NUL, or the padding begins with one, every reader reads the
-    /// same name.
-    LongNameOverrun(Metadata),
+    /// A GNU long name or long link may hold no NUL. GNU tar and Python then
+    /// read the name on into the padding, as far as the first NUL. bsdtar and
+    /// Go read as far as its size, and so name the member, or its link
+    /// target, differently. Where the data holds a NUL, every reader reads
+    /// the same name.
+    ///
+    /// Python reads a pax or global extended header's records on into the
+    /// padding, as far as the first NUL. GNU tar, bsdtar and Go read as far
+    /// as its size. A record there can rename a member, change its size
+    /// and so hide a member in its data, or set its owner, for Python alone.
+    /// Where the padding begins with a NUL, every reader reads the same
+    /// records.
+    MetadataOverrun(Metadata),
     /// A metadata member holds nothing: a pax extended header or a global one
     /// with no records, or a GNU long link whose value is empty.
     ///
@@ -699,9 +706,10 @@ impl fmt::Display for ErrorKind {
             ErrorKind::LongNameNul(metadata) => {
                 write!(f, "a {metadata} holds a NUL before its last byte")
             }
-            ErrorKind::LongNameOverrun(metadata) => write!(
+            ErrorKind::MetadataOverrun(metadata) => write!(
                 f,
-                "a {metadata} holds no NUL, and readers read on into the padding after it differently",
+                "a {metadata}'s padding begins with a byte that is not NUL, which readers read \
+                 on into differently",
             ),
             ErrorKind::EmptyMetadata(metadata) => write!(f, "a {metadata} is empty"),
             ErrorKind::MetadataWithoutMagic(metadata) => write!(

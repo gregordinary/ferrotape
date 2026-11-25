@@ -1,0 +1,42 @@
+[statement]
+A global header whose size covers a `comment` record, a `path` record in
+the padding after it, after another member. Python applies the path to
+every member after it, and the other readers read as far as the size.
+ferrotape refuses the archive in every mode.
+
+[archive]
+header name=first
+data "1\n"
+header name=PaxHeader typeflag=g size=17
+data "17 comment=hello\n15 path=evil/f\n"
+header name=f
+header name=after
+end
+
+[verdict]
+all: refused MetadataOverrun at 1024
+
+[gnu-tar 1.35]
+member listed=- path=first size=2 mode=0o644 data="1\n"
+member listed=- path=f size=0 mode=0o644 data=""
+member listed=- path=after size=0 mode=0o644 data=""
+exit 0
+
+[bsdtar 3.8.11]
+member listed=- path=first size=2 mode=0o644
+member listed=- path=f size=0 mode=0o644
+member listed=- path=after size=0 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=0 path=evil/f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=evil/f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
+
+[go 1.27.0]
+member type=0 path=first size=2 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="1\n"
+member type=g path=PaxHeader size=0 mode=0o0 mtime=-62135596800 uid=0 gid=0 uname="" gname="" data=""
+member type=0 path=f size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+member type=0 path=after size=0 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data=""
+ok
