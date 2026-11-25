@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust (pinned)
         # rust-toolchain.toml pins the toolchain, its components, and the
         # WebAssembly and Windows targets, so fmt, clippy, and the builds all
@@ -68,6 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust (MSRV)
         # The `+1.91` override wins over the pinned toolchain, which sits ahead
         # of the floor, so this checks the version `rust-version` promises
@@ -89,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check dependency licenses and advisories
         # deny.toml pins the permitted licenses, the advisory policy, and the
         # registries a dependency may come from, dev-dependencies included.
@@ -113,6 +119,8 @@ jobs:
       FUZZ_NIGHTLY: nightly-2026-07-09
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust (pinned nightly) and cargo-fuzz
         run: |
           rustup toolchain install "$FUZZ_NIGHTLY" --profile minimal
@@ -145,6 +153,8 @@ jobs:
       RUSTDOC_JSON_NIGHTLY: nightly-2026-07-09
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust (pinned, plus the pinned nightly for rustdoc JSON)
         run: |
           rustup show

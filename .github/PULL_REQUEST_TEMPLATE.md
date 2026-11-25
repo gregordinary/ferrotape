@@ -20,8 +20,13 @@
 - [ ] `cargo doc --workspace --all-features --no-deps` with `RUSTDOCFLAGS='-D warnings'`
 - [ ] `cargo build --lib --target wasm32-unknown-unknown`
 - [ ] `cargo build --lib --target x86_64-pc-windows-msvc`
+- [ ] `cargo build --lib --no-default-features --target thumbv7em-none-eabihf`
+- [ ] `cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings`
+- [ ] `cargo clippy --lib --no-default-features --target thumbv7em-none-eabihf -- -D warnings`
 - [ ] `cargo +1.91 test --workspace --all-features` with `RUSTFLAGS='-D warnings'`
-- [ ] `cargo deny check licenses advisories sources`, if a dependency changed
+- [ ] `cargo deny check licenses advisories sources`, and
+      `cargo deny --manifest-path fuzz/Cargo.toml check licenses advisories sources`,
+      if a dependency changed
 - [ ] The public surface is unchanged, **or** `public-api.txt` is regenerated
       and the diff is intentional
 
