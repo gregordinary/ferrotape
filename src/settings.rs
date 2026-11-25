@@ -82,8 +82,13 @@ pub enum Level {
     ///
     /// For archives from sources the caller does not control: a check made
     /// with it passes nothing that a widely used extractor then reads
-    /// otherwise. Mainstream writers do not produce what this level refuses
-    /// and the next reads.
+    /// otherwise. Mainstream writers produce two kinds of archive this level
+    /// refuses and the next reads. One is a sparse member in GNU's pax forms
+    /// ([`SparseFlaw::PaxForm`](crate::SparseFlaw::PaxForm)), which bsdtar
+    /// writes for any file with holes and GNU tar with `--format=posix
+    /// --sparse`. The other is a member whose mode has setuid, setgid or
+    /// sticky beside an access control list, which both tars write for
+    /// shared directories.
     #[default]
     Strict,
     /// The four readers above and POSIX count, and no others.

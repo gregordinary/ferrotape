@@ -127,9 +127,9 @@ versions:
 - Python 3.12.3, as Ubuntu 24.04 packages it
 - Go 1.27.0
 
-The repository's case catalog holds 242 archives. Each case records the rule
-it shows, ferrotape's verdict in every setting, and each reader's reading,
-taken by running the reader. The tests hold ferrotape to every case. CI
+The repository's case catalog holds the archives the rules rest on. Each
+case records the rule it shows, ferrotape's verdict in every setting, and
+each reader's reading, taken by running the reader. The tests hold ferrotape to every case. CI
 checks the recorded readings against the pinned readers, and reads 10,000
 changed archives in every setting. A weekly workflow reads the catalog with
 each reader's newest release.
