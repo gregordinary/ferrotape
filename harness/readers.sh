@@ -24,6 +24,9 @@
 set -euo pipefail
 
 gnu_mirror=https://ftpmirror.gnu.org
+# GNU's keyring comes from GNU's own server, never through a mirror: a mirror
+# that serves a modified tarball could serve a keyring that verifies it.
+gnu_keyring=https://ftp.gnu.org/gnu/gnu-keyring.gpg
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -34,8 +37,9 @@ usage() {
 
 # curl, retrying on any error. ftpmirror.gnu.org sends each request to a
 # mirror of its choosing, and a mirror can be unreachable or serve an expired
-# certificate, so a retry asks again. What is downloaded is checked by digest
-# or signature, whichever mirror serves it.
+# certificate, so a retry asks again. What is downloaded is checked by digest,
+# or by a signature checked against the keyring from GNU's own server,
+# whichever mirror serves it.
 get() {
     curl --fail --silent --show-error --location --connect-timeout 30 \
         --retry 5 --retry-all-errors "$@"
@@ -138,9 +142,10 @@ newest_gnu_tar() {
         grep -oE 'tar-[0-9]+(\.[0-9]+)+\.tar\.xz"' | tr -d '"' |
         sed -e 's/^tar-//' -e 's/\.tar\.xz$//' | sort -V | tail -n 1)
     [ -n "$version" ] || { echo "no GNU tar release listed" >&2; exit 1; }
-    for file in "tar/tar-$version.tar.xz" "tar/tar-$version.tar.xz.sig" gnu-keyring.gpg; do
+    for file in "tar/tar-$version.tar.xz" "tar/tar-$version.tar.xz.sig"; do
         get --output "$work/$(basename "$file")" "$gnu_mirror/$file"
     done
+    get --output "$work/gnu-keyring.gpg" "$gnu_keyring"
     gpg --batch --quiet --homedir "$work" --no-default-keyring \
         --keyring "$work/gnu-keyring.gpg" \
         --verify "$work/tar-$version.tar.xz.sig" "$work/tar-$version.tar.xz" 2>/dev/null ||
