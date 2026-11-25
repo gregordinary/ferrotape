@@ -1,0 +1,37 @@
+[statement]
+A GNU dumpdir (typeflag `D`) of 6 bytes with a `SCHILY.realsize` record of
+1024. bsdtar lists the record as the member's size, and GNU tar, Python
+and Go its 6 bytes. Every reader lists the member after it, as ferrotape
+does: the record frames nothing.
+
+[archive]
+pax SCHILY.realsize=1024
+header name=dir/ typeflag=D magic=gnu
+data "Yfile\0"
+header name=tail
+data "hello\n"
+end
+
+[verdict]
+all: read
+
+[gnu-tar 1.35]
+member listed=d path=dir/ size=6 mode=0o644
+member listed=- path=tail size=6 mode=0o644 data="hello\n"
+warning "tar: Ignoring unknown extended header keyword 'SCHILY.realsize'"
+exit 0
+
+[bsdtar 3.8.11]
+member listed=d path=dir/ size=1024 mode=0o644
+member listed=- path=tail size=6 mode=0o644
+exit 0
+
+[python 3.12.3]
+member type=D path=dir/ size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="Yfile\0"
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok
+
+[go 1.27.0]
+member type=D path=dir/ size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="Yfile\0"
+member type=0 path=tail size=6 mode=0o644 mtime=0 uid=0 gid=0 uname=root gname=root data="hello\n"
+ok

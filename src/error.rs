@@ -588,9 +588,13 @@ pub enum ErrorKind {
     /// of a typeflag it does not know. It
     /// extracts a file of that length: the data, then zeros to the size, or
     /// the data cut short. A record that is not a number reads to it as zero.
-    /// GNU tar, Go and Python ignore the record. Every reader takes a sparse
-    /// member's real size from its map. On a directory, a link, a device or a
-    /// FIFO, every reader ignores the record, and it is read.
+    /// GNU tar, Go and Python ignore the record.
+    ///
+    /// Every reader takes a sparse member's real size from its map. On a
+    /// directory, a link, a device or a
+    /// FIFO, it is read, since no reader reads members otherwise. Every
+    /// reader ignores it there, but bsdtar lists a GNU dumpdir's (typeflag
+    /// `D`) size from it.
     RealSizeRecord,
     /// A sparse member whose map the reference readers would extract
     /// otherwise than one another, or which the reader would hold beyond its
