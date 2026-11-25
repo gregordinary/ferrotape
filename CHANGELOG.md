@@ -11,7 +11,7 @@ reports for their members, and the bytes it writes. A change to any of them
 is recorded, with what it changes, even when no signature of the public API
 does.
 
-## [Unreleased]
+## [0.1.0] - 2026-11-25
 
 The first release, measured against GNU tar 1.35 and Python 3.12.3 as Ubuntu
 24.04 packages them, bsdtar 3.8.11 and Go 1.27.0.
@@ -223,3 +223,5 @@ Each refusal has an `ErrorKind`. A stream that is no archive at all is
   tar, Python and Go read every field as written. bsdtar lists every field as
   written but one: a member with an access control list, whose mode it takes
   from the list.
+
+[0.1.0]: https://github.com/gregordinary/ferrotape/releases/tag/v0.1.0
