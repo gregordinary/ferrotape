@@ -1,7 +1,6 @@
 //! Pax extended headers: records framed by their length, the records a member
 //! has, and the keywords the reader applies to it.
 
-use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
 use core::iter::FusedIterator;
@@ -918,13 +917,32 @@ pub(crate) fn push_record(out: &mut Vec<u8>, keyword: &[u8], value: &[u8]) -> Op
         }
         length = total;
     }
-    out.extend_from_slice(length.to_string().as_bytes());
+    push_decimal(out, u64::try_from(length).ok()?);
     out.push(b' ');
     out.extend_from_slice(keyword);
     out.push(b'=');
     out.extend_from_slice(value);
     out.push(b'\n');
     Some(())
+}
+
+/// Appends `value`'s decimal digits to `out`, without leading zeros.
+pub(crate) fn push_decimal(out: &mut Vec<u8>, value: u64) {
+    // `u64::MAX` has twenty digits.
+    let mut digits = [0u8; 20];
+    let mut rest = value;
+    let mut start = digits.len();
+    while let Some(at) = start.checked_sub(1)
+        && let Some(slot) = digits.get_mut(at)
+    {
+        *slot = b'0'.saturating_add(u8::try_from(rest % 10).unwrap_or(0));
+        rest /= 10;
+        start = at;
+        if rest == 0 {
+            break;
+        }
+    }
+    out.extend_from_slice(digits.get(start..).unwrap_or_default());
 }
 
 /// The first record of `rest`, which is not empty, and the bytes after it.

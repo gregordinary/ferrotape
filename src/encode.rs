@@ -2,7 +2,6 @@
 //! POSIX ustar header block, preceded by a pax extended header for whatever
 //! the block cannot hold.
 
-use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -10,7 +9,7 @@ use crate::entry::{EntryKind, Timestamp};
 use crate::error::Keyword;
 use crate::escaped::Escaped;
 use crate::header::{BLOCK, Draft, Number, SIZE_LIMIT, Text};
-use crate::pax::push_record;
+use crate::pax::{push_decimal, push_record};
 use crate::settings::Limits;
 
 /// The header of a member to write: its path, its kind, and its metadata.
@@ -270,7 +269,7 @@ impl Header {
         }
 
         if !draft.octal(Number::Size, self.size) {
-            extended.push(b"size", self.size.to_string().as_bytes())?;
+            extended.push_number(b"size", self.size)?;
             // The size frames the archive, so the block holds it exactly, in
             // GNU's base-256, which every reader reads beside the record.
             draft.base256(Number::Size, i128::from(self.size));
@@ -282,7 +281,7 @@ impl Header {
             (Number::Gid, b"gid", self.gid),
         ] {
             if !draft.octal(field, u64::from(id)) {
-                extended.push(keyword, id.to_string().as_bytes())?;
+                extended.push_number(keyword, u64::from(id))?;
                 // An id the field cannot hold, clamped: a reader without the
                 // record takes the member for an unprivileged owner's rather
                 // than root's.
@@ -304,14 +303,14 @@ impl Header {
         let seconds = u64::try_from(self.mtime.secs()).unwrap_or(0);
         let block_mtime = seconds.min(Number::Mtime.octal_max());
         if self.mtime.nanos() != 0 || i64::try_from(block_mtime) != Ok(self.mtime.secs()) {
-            extended.push(b"mtime", pax_time(self.mtime).as_bytes())?;
+            extended.push_time(b"mtime", self.mtime)?;
         }
         draft.octal(Number::Mtime, block_mtime);
         if let Some(atime) = self.atime {
-            extended.push(b"atime", pax_time(atime).as_bytes())?;
+            extended.push_time(b"atime", atime)?;
         }
         if let Some(ctime) = self.ctime {
-            extended.push(b"ctime", pax_time(ctime).as_bytes())?;
+            extended.push_time(b"ctime", ctime)?;
         }
 
         if matches!(self.kind, EntryKind::CharDevice | EntryKind::BlockDevice) {
@@ -327,14 +326,22 @@ impl Header {
         }
 
         for (name, value) in &self.xattrs {
-            extended.push(&[XATTR, name.as_slice()].concat(), value)?;
+            extended.push_xattr(name, value)?;
         }
         for (keyword, value) in &self.records {
             extended.push(keyword, value)?;
         }
 
         let records = extended.finish()?;
-        let mut out = Vec::with_capacity(BLOCK);
+        // The pax header's block and its records, padded, where there are
+        // records, and the member's block.
+        let room = match records.len() {
+            0 => Some(BLOCK),
+            len => len
+                .checked_next_multiple_of(BLOCK)
+                .and_then(|len| len.checked_add(BLOCK.saturating_mul(2))),
+        };
+        let mut out = Vec::with_capacity(room.unwrap_or(BLOCK));
         if !records.is_empty() {
             let size = u64::try_from(records.len()).map_err(|_| HeaderError::MetadataTooLarge)?;
             if size > Limits::default().metadata {
@@ -421,7 +428,7 @@ impl Header {
                 return Err(HeaderError::EmptyXattr { name: name.clone() });
             }
         }
-        if let Some(name) = repeated(self.xattrs.iter().map(|(name, _)| name.as_slice())) {
+        if let Some(name) = repeated(&self.xattrs) {
             return Err(HeaderError::RepeatedXattr {
                 name: name.to_vec(),
             });
@@ -443,8 +450,7 @@ impl Header {
                 return Err(HeaderError::DefaultAclWithoutDirectory);
             }
         }
-        if let Some(keyword) = repeated(self.records.iter().map(|(keyword, _)| keyword.as_slice()))
-        {
+        if let Some(keyword) = repeated(&self.records) {
             return Err(HeaderError::RepeatedKeyword {
                 keyword: keyword.to_vec(),
             });
@@ -496,11 +502,36 @@ struct Extended {
     /// Whether a text value (a path, a link target, an owner name) is not
     /// UTF-8, which POSIX has a header declare.
     binary: bool,
+    /// Room in which a record's keyword or value is spelled before the
+    /// record is written, made once for every record.
+    spelled: Vec<u8>,
 }
 
 impl Extended {
     fn push(&mut self, keyword: &[u8], value: &[u8]) -> Result<(), HeaderError> {
-        push_record(&mut self.records, keyword, value).ok_or(HeaderError::MetadataTooLarge)
+        write_record(&mut self.records, keyword, value)
+    }
+
+    /// A number, in decimal digits.
+    fn push_number(&mut self, keyword: &[u8], number: u64) -> Result<(), HeaderError> {
+        self.spelled.clear();
+        push_decimal(&mut self.spelled, number);
+        write_record(&mut self.records, keyword, &self.spelled)
+    }
+
+    /// A time, as [`push_pax_time`] spells it.
+    fn push_time(&mut self, keyword: &[u8], time: Timestamp) -> Result<(), HeaderError> {
+        self.spelled.clear();
+        push_pax_time(&mut self.spelled, time);
+        write_record(&mut self.records, keyword, &self.spelled)
+    }
+
+    /// The extended attribute `name`, a `SCHILY.xattr.` record.
+    fn push_xattr(&mut self, name: &[u8], value: &[u8]) -> Result<(), HeaderError> {
+        self.spelled.clear();
+        self.spelled.extend_from_slice(XATTR);
+        self.spelled.extend_from_slice(name);
+        write_record(&mut self.records, &self.spelled, value)
     }
 
     /// A text value, which POSIX reads as UTF-8 unless the header says
@@ -523,6 +554,15 @@ impl Extended {
         records.extend_from_slice(&self.records);
         Ok(records)
     }
+}
+
+/// Appends the record `keyword=value` to `records`, which the first record
+/// gives room for a block of them, as most headers' records fit in.
+fn write_record(records: &mut Vec<u8>, keyword: &[u8], value: &[u8]) -> Result<(), HeaderError> {
+    if records.capacity() == 0 {
+        records.reserve(BLOCK);
+    }
+    push_record(records, keyword, value).ok_or(HeaderError::MetadataTooLarge)
 }
 
 /// The keyword prefix of a record holding an extended attribute.
@@ -641,17 +681,32 @@ fn leading_components(dir: &[u8], room: usize) -> &[u8] {
     trim_slashes(dir.get(..end).unwrap_or_default())
 }
 
-/// A pax time: seconds since the epoch, and the fraction of a second where
-/// there is one. The fraction has as few digits as hold it exactly, as GNU
-/// tar, bsdtar and Go write it. A time before 1970 with a fraction is refused before this
-/// ([`HeaderError::FractionBeforeEpoch`]).
-fn pax_time(time: Timestamp) -> String {
+/// Appends a pax time to `out`: seconds since the epoch, and the fraction of
+/// a second where there is one. The fraction has as few digits as hold it
+/// exactly, as GNU tar, bsdtar and Go write it. A time before 1970 with a
+/// fraction is refused before this ([`HeaderError::FractionBeforeEpoch`]).
+fn push_pax_time(out: &mut Vec<u8>, time: Timestamp) {
     let (secs, nanos) = (time.secs(), time.nanos());
-    if nanos == 0 {
-        return secs.to_string();
+    if secs < 0 {
+        out.push(b'-');
     }
-    let digits = alloc::format!("{nanos:09}");
-    alloc::format!("{secs}.{}", digits.trim_end_matches('0'))
+    push_decimal(out, secs.unsigned_abs());
+    if nanos == 0 {
+        return;
+    }
+    // Nine digits, the nanoseconds zero-padded, less the zeros they end in.
+    let mut digits = [b'0'; 9];
+    let mut rest = nanos;
+    for slot in digits.iter_mut().rev() {
+        *slot = b'0'.saturating_add(u8::try_from(rest % 10).unwrap_or(0));
+        rest /= 10;
+    }
+    let end = digits
+        .iter()
+        .rposition(|digit| *digit != b'0')
+        .map_or(0, |last| last.saturating_add(1));
+    out.push(b'.');
+    out.extend_from_slice(digits.get(..end).unwrap_or_default());
 }
 
 /// Whether `keyword` can be written as a record's keyword. It is not empty,
@@ -693,9 +748,12 @@ fn reserved(keyword: &[u8]) -> bool {
     FIELDS.contains(&keyword) || PREFIXES.iter().any(|prefix| keyword.starts_with(prefix))
 }
 
-/// A name `names` holds more than once.
-fn repeated<'a>(names: impl Iterator<Item = &'a [u8]>) -> Option<&'a [u8]> {
-    let mut names: Vec<&[u8]> = names.collect();
+/// A name, the first of a pair, that `pairs` holds more than once.
+fn repeated(pairs: &[(Vec<u8>, Vec<u8>)]) -> Option<&[u8]> {
+    if pairs.len() < 2 {
+        return None;
+    }
+    let mut names: Vec<&[u8]> = pairs.iter().map(|(name, _)| name.as_slice()).collect();
     names.sort_unstable();
     names.windows(2).find_map(|pair| match pair {
         [one, other] if one == other => Some(*one),
